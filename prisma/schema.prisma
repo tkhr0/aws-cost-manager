@@ -1,0 +1,72 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id          String       @id @default(uuid())
+  name        String
+  accountId   String       @unique
+  profileName String?
+  roleArn     String?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  CostRecord  CostRecord[]
+  Budget      Budget[]
+  Forecast    Forecast[]
+}
+
+model CostRecord {
+  id         String   @id @default(uuid())
+  date       DateTime
+  amount     Float
+  accountId  String
+  service    String
+  recordType String // Usage, Tax, Support, etc.
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  Account    Account  @relation(fields: [accountId], references: [id])
+
+  @@unique([date, accountId, service, recordType])
+}
+
+model Budget {
+  id        String   @id @default(uuid())
+  month     String // YYYY-MM
+  amount    Float
+  accountId String? // Null means global budget
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Account   Account? @relation(fields: [accountId], references: [id])
+
+  @@unique([month, accountId])
+}
+
+// Added based on review
+model Forecast {
+  id           String   @id @default(uuid())
+  month        String // YYYY-MM
+  amount       Float
+  accountId    String
+  calculatedAt DateTime @default(now())
+  type         String // "Variable", "Fixed", "Total"
+  createdAt    DateTime @default(now())
+  Account      Account  @relation(fields: [accountId], references: [id])
+}
+
+model AmortizationRule {
+  id          String   @id @default(uuid())
+  start       DateTime
+  end         DateTime
+  totalAmount Float
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
