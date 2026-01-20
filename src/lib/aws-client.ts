@@ -20,12 +20,14 @@ export class AwsCostClient {
         start: string,
         end: string,
         granularity: 'DAILY' | 'MONTHLY',
+        groupBy?: { Type: 'DIMENSION' | 'TAG'; Key: string },
         filter?: any
     ): Promise<ResultByTime[]> {
         const params: GetCostAndUsageCommandInput = {
             TimePeriod: { Start: start, End: end },
             Granularity: granularity,
             Metrics: ['UnblendedCost', 'AmortizedCost', 'UsageQuantity'],
+            GroupBy: groupBy ? [groupBy] : undefined,
             Filter: filter,
         };
 

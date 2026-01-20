@@ -1,0 +1,287 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import {
+    ArrowLeft,
+    RefreshCcw,
+    Download,
+    Filter,
+    Table,
+} from 'lucide-react';
+
+export default function AnalyticsPage() {
+    const router = useRouter();
+    const [accounts, setAccounts] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [status, setStatus] = useState('');
+
+    // Filters
+    const [selectedAccount, setSelectedAccount] = useState('all');
+    const [granularity, setGranularity] = useState<'monthly' | 'daily'>('monthly');
+    const [startDate, setStartDate] = useState(() => {
+        const d = new Date();
+        d.setMonth(d.getMonth() - 5); // Default last 6 months
+        d.setDate(1);
+        return d.toISOString().split('T')[0];
+    });
+    const [endDate, setEndDate] = useState(() => {
+        const d = new Date();
+        // End of current month
+        return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+    });
+
+    // Data
+    const [data, setData] = useState<any>(null); // { headers: string[], rows: any[] }
+
+    // Sorting
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'total', direction: 'desc' });
+
+    useEffect(() => {
+        loadAccounts();
+    }, []);
+
+    useEffect(() => {
+        loadAnalyticsData();
+    }, [selectedAccount, granularity, startDate, endDate]);
+
+    const loadAccounts = async () => {
+        if (window.electron) {
+            const accs = await window.electron.getAccounts();
+            setAccounts(accs);
+        }
+    };
+
+    const loadAnalyticsData = async () => {
+        if (window.electron) {
+            setLoading(true);
+            try {
+                const result = await window.electron.getAnalyticsData({
+                    accountId: selectedAccount,
+                    startDate,
+                    endDate,
+                    granularity,
+                });
+                setData(result);
+            } catch (error: any) {
+                setStatus(`取得エラー: ${error.message}`);
+                console.error(error);
+            } finally {
+                setLoading(false);
+            }
+        }
+    };
+
+    const handleSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'desc';
+        if (sortConfig.key === key && sortConfig.direction === 'desc') {
+            direction = 'asc';
+        }
+        setSortConfig({ key, direction });
+    };
+
+    const sortedRows = (() => {
+        if (!data?.rows) return [];
+        return [...data.rows].sort((a, b) => {
+            const aVal = a[sortConfig.key];
+            const bVal = b[sortConfig.key];
+
+            // Handle undefined/null
+            if (aVal === undefined && bVal === undefined) return 0;
+            if (aVal === undefined) return 1;
+            if (bVal === undefined) return -1;
+
+            if (typeof aVal === 'number' && typeof bVal === 'number') {
+                return sortConfig.direction === 'asc' ? aVal - bVal : bVal - aVal;
+            }
+            // String comparison
+            const result = String(aVal).localeCompare(String(bVal));
+            return sortConfig.direction === 'asc' ? result : -result;
+        });
+    })();
+
+    const handleExport = () => {
+        // Simple CSV export for now
+        // TODO: Implement proper CSV export via Electron for pivot data if needed
+        alert('CSV export for detailed view is coming soon.');
+    };
+
+    return (
+        <div className="min-h-screen bg-[#020617] text-slate-200 font-sans p-8 selection:bg-blue-500/30">
+            <div className="max-w-7xl mx-auto">
+                <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                    <div>
+                        <button
+                            onClick={() => router.push('/')}
+                            className="flex items-center gap-2 text-slate-400 hover:text-slate-200 mb-4 transition-colors text-sm"
+                        >
+                            <ArrowLeft size={16} />
+                            ダッシュボードに戻る
+                        </button>
+                        <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+                            <Table className="text-blue-400" />
+                            詳細分析
+                        </h1>
+                        <p className="text-slate-400 mt-1 text-sm">
+                            コストデータを表形式で詳細に分析します。列ヘッダーをクリックしてソート可能です。
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                        <div className="flex items-center gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-slate-800">
+                            <button
+                                onClick={() => setGranularity('monthly')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${granularity === 'monthly' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                            >
+                                月次
+                            </button>
+                            <button
+                                onClick={() => setGranularity('daily')}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${granularity === 'daily' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-slate-200'}`}
+                            >
+                                日次
+                            </button>
+                        </div>
+
+                        <button
+                            onClick={loadAnalyticsData}
+                            className="p-2.5 bg-slate-800 border border-slate-700 rounded-xl text-slate-400 hover:text-white transition-all"
+                            title="再読み込み"
+                        >
+                            <RefreshCcw size={18} className={loading ? 'animate-spin' : ''} />
+                        </button>
+                    </div>
+                </header>
+
+                <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-3xl shadow-xl">
+                    <div className="flex flex-wrap gap-4 mb-6 pb-6 border-b border-slate-800">
+                        {/* Filters */}
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">アカウント</label>
+                            <select
+                                value={selectedAccount}
+                                onChange={(e) => setSelectedAccount(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-48 p-2.5"
+                            >
+                                <option value="all">全アカウント</option>
+                                {accounts.map((acc) => (
+                                    <option key={acc.id} value={acc.id}>
+                                        {acc.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">開始日</label>
+                            <input
+                                type="date"
+                                value={startDate}
+                                onChange={(e) => setStartDate(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">終了日</label>
+                            <input
+                                type="date"
+                                value={endDate}
+                                onChange={(e) => setEndDate(e.target.value)}
+                                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
+                            />
+                        </div>
+
+                        <div className="ml-auto self-end">
+                            <button
+                                onClick={handleExport}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-all font-medium text-sm"
+                            >
+                                <Download size={16} />
+                                CSVダウンロード
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Pivot Table */}
+                    <div className="overflow-x-auto relative rounded-xl border border-slate-800">
+                        <table className="w-full text-sm text-left text-slate-400">
+                            <thead className="text-xs text-slate-300 uppercase bg-slate-900 sticky top-0 z-10">
+                                <tr>
+                                    <th
+                                        scope="col"
+                                        className="px-6 py-4 sticky left-0 bg-slate-900 border-r border-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.5)] z-20 w-64 min-w-[16rem] cursor-pointer hover:bg-slate-800/80 transition-colors"
+                                        onClick={() => handleSort('service')}
+                                    >
+                                        <div className="flex items-center gap-1">
+                                            サービス名
+                                            {sortConfig.key === 'service' && (
+                                                <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                                            )}
+                                        </div>
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-6 py-4 text-right bg-slate-900 border-r border-slate-800 font-bold text-white cursor-pointer hover:bg-slate-800/80 transition-colors"
+                                        onClick={() => handleSort('total')}
+                                    >
+                                        <div className="flex items-center justify-end gap-1">
+                                            合計 (USD)
+                                            {sortConfig.key === 'total' && (
+                                                <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                                            )}
+                                        </div>
+                                    </th>
+                                    {data?.headers.map((header: string) => (
+                                        <th
+                                            key={header}
+                                            scope="col"
+                                            className="px-6 py-4 text-right min-w-[8rem] whitespace-nowrap cursor-pointer hover:bg-slate-800/80 transition-colors"
+                                            onClick={() => handleSort(header)}
+                                        >
+                                            <div className="flex items-center justify-end gap-1">
+                                                {header}
+                                                {sortConfig.key === header && (
+                                                    <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                                                )}
+                                            </div>
+                                        </th>
+                                    ))}
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800 bg-slate-900/20">
+                                {!data || data.rows.length === 0 ? (
+                                    <tr>
+                                        <td colSpan={(data?.headers.length || 0) + 2} className="px-6 py-12 text-center text-slate-500">
+                                            {loading ? '読み込み中...' : 'データがありません'}
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    sortedRows.map((row: any, i: number) => (
+                                        <tr key={i} className="hover:bg-slate-800/50 transition-colors group">
+                                            <th scope="row" className="px-6 py-3 font-medium text-slate-200 whitespace-nowrap sticky left-0 bg-[#0b1221] group-hover:bg-[#162032] border-r border-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.5)] z-10">
+                                                <div className="truncate w-60" title={row.service}>
+                                                    {row.service}
+                                                </div>
+                                            </th>
+                                            <td className="px-6 py-3 text-right font-bold text-white border-r border-slate-800">
+                                                ${row.total.toFixed(2)}
+                                            </td>
+                                            {data.headers.map((header: string) => (
+                                                <td key={header} className="px-6 py-3 text-right">
+                                                    {row[header] !== undefined
+                                                        ? `$${Number(row[header]).toFixed(2)}`
+                                                        : <span className="text-slate-700">-</span>}
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+}
