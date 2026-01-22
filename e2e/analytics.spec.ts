@@ -14,5 +14,8 @@ test('analytics page loads and displays key elements', async ({ page }) => {
 
     // Verify table headers (using text locator for simplicity)
     await expect(page.getByText('サービス名')).toBeVisible();
+
+    // Switch to daily to see the total column
+    await page.getByText('日次').click();
     await expect(page.getByText('合計 (USD)')).toBeVisible();
 });
