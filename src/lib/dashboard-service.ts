@@ -48,7 +48,8 @@ export async function getDashboardData(accountId?: string, month?: string) {
         // If the sync logic switched from Total to Service, we might have both types of records in DB?
         // Let's assume the user syncs and we only have the new detailed records,
         // OR filter out records where service === 'Total' when we want detailed breakdown.
-        if (r.service === 'Total') return; // Skip the aggregate record if we are building breakdown
+        if (r.service === 'Total') return;
+        if (r.service === 'Tax') return; // Exclude Tax from aggregation
 
         if (!serviceMap.has(r.service)) {
             serviceMap.set(r.service, { total: 0, daily: new Map() });
@@ -85,6 +86,7 @@ export async function getDashboardData(accountId?: string, month?: string) {
     const dailyAggregated = new Map<string, number>();
     records.forEach((r: any) => {
         if (r.service === 'Total') return;
+        if (r.service === 'Tax') return;
         const dateKey = r.date.toISOString().split('T')[0];
         dailyAggregated.set(dateKey, (dailyAggregated.get(dateKey) || 0) + r.amount);
     });
@@ -93,15 +95,48 @@ export async function getDashboardData(accountId?: string, month?: string) {
         .map(([date, amount]) => ({ date: new Date(date), amount }))
         .sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    // Get budget
-    // Get budget
+    // Get budget & exchange rate
     const monthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-    const budget = await prisma.budget.findFirst({
+
+    // 1. Try to find specific monthly budget override
+    const budgetOverride = await prisma.budget.findFirst({
         where: {
             month: monthKey,
             accountId: (accountId && accountId !== 'all') ? accountId : null,
         },
     });
+
+    let budget = 0;
+    let exchangeRate = 150; // Default
+
+    if (budgetOverride) {
+        budget = budgetOverride.amount;
+    }
+
+    // 2. If no override (or we simply want to sum up base budgets for 'all'), check Account settings
+    // If 'all', we might want granular override sum? That's complex.
+    // Simplified:
+    // If single account selected: Override > Account.budget
+    // If 'all': Sum(Account.budgets). (Ignoring overrides for simplicity or calculating mix is hard)
+
+    if (accountId && accountId !== 'all') {
+        const acc = await prisma.account.findUnique({ where: { id: accountId } });
+        if (acc) {
+            if (!budgetOverride) budget = acc.budget;
+            exchangeRate = acc.exchangeRate;
+        }
+    } else {
+        // All accounts
+        const accounts = await prisma.account.findMany();
+        if (!budgetOverride) {
+            // Sum of base budgets
+            budget = accounts.reduce((sum: number, a: any) => sum + a.budget, 0);
+        }
+        // Use average or first account rate?
+        if (accounts.length > 0) {
+            exchangeRate = accounts[0].exchangeRate;
+        }
+    }
 
     // Get forecast
     const forecast = await prisma.forecast.findFirst({
@@ -116,7 +151,8 @@ export async function getDashboardData(accountId?: string, month?: string) {
     return {
         records: aggregatedRecords, // Return aggregated view for main chart
         serviceBreakdown,           // Return detailed view for table
-        budget: budget?.amount || 0,
+        budget,
+        exchangeRate,               // Return rate for JPY conversion
         forecast: forecast?.amount || 0,
     };
 }

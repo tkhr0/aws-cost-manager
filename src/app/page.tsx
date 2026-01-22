@@ -119,34 +119,18 @@ export default function Home() {
   };
 
   const totalActual = dashboardData?.records?.reduce((sum: number, r: any) => sum + r.amount, 0) || 0;
-  const budget = dashboardData?.budget || 3000;
-  const forecast = dashboardData?.forecast || totalActual * 1.5;
-  const remaining = budget - totalActual;
+  const budget = dashboardData?.budget || 0;
+  const forecast = dashboardData?.forecast || 0;
+  const exchangeRate = dashboardData?.exchangeRate || 150;
+
+  const remaining = budget > 0 ? budget - totalActual : 0;
+  const isOverBudget = budget > 0 && forecast > budget;
+
+  const formatJpy = (usd: number) => `¥${Math.round(usd * exchangeRate).toLocaleString()}`;
 
   return (
-    <div className="min-h-screen bg-[#020617] text-slate-200 font-sans selection:bg-blue-500/30">
-      {/* Sidebar */}
-      <div className="fixed left-0 top-0 h-full w-20 bg-slate-900/50 border-r border-slate-800 flex flex-col items-center py-8 gap-8">
-        <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-          <LayoutDashboard size={24} className="text-white" />
-        </div>
-        <nav className="flex flex-col gap-6">
-          <NavItem icon={<CreditCard size={20} />} active />
-          <button onClick={() => router.push('/forecast')} title="予測シミュレーション">
-            <NavItem icon={<TrendingUp size={20} />} />
-          </button>
-
-          {/* Analytics Link */}
-          <button onClick={() => router.push('/analytics')} title="詳細分析">
-            <NavItem icon={<Table size={20} />} />
-          </button>
-          <button onClick={() => router.push('/settings')} title="設定">
-            <NavItem icon={<Settings size={20} />} />
-          </button>
-        </nav>
-      </div>
-
-      <main className="ml-20 p-10 max-w-7xl mx-auto">
+    <div className="">
+      <main className="p-10 max-w-7xl mx-auto">
         <header className="mb-10 flex justify-between items-end">
           <div>
             <div className="flex items-center gap-2 text-blue-400 font-medium mb-1 uppercase tracking-wider text-xs">
@@ -161,9 +145,8 @@ export default function Home() {
                 const [y, m] = selectedMonth.split('-');
                 const start = new Date(parseInt(y), parseInt(m) - 1, 1);
                 const end = new Date(parseInt(y), parseInt(m), 0);
-                // Japanese Date Format
                 const formatDate = (d: Date) => `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日`;
-                return `${formatDate(start)} — ${formatDate(end)}`;
+                return `${formatDate(start)} — ${formatDate(end)} (@${exchangeRate} JPY/USD)`;
               })()}
             </p>
           </div>
@@ -223,23 +206,25 @@ export default function Home() {
           <StatCard
             title="今月のコスト (実績)"
             value={`$${totalActual.toFixed(2)}`}
-            subValue={`データ取得日数: ${dashboardData?.records?.length || 0}日`}
+            subValue={formatJpy(totalActual)}
             trend={totalActual > 0 ? '+' : ''}
             trendUp
           />
           <StatCard
             title="今月の着地見込 (予測)"
             value={`$${forecast.toFixed(2)}`}
-            subValue="現在のペースに基づく予測"
-            trend=""
-            trendUp={false}
+            subValue={formatJpy(forecast)}
+            trend={isOverBudget ? '予算超過' : ''}
+            trendUp={!isOverBudget}
+            warning={isOverBudget}
           />
           <StatCard
             title="予算残高"
             value={`$${remaining.toFixed(2)}`}
-            subValue={`月次予算: $${budget.toFixed(2)}`}
-            trend={`${Math.round((totalActual / budget) * 100)}%`}
+            subValue={`月次予算: $${budget.toFixed(2)} (${formatJpy(budget)})`}
+            trend={budget > 0 ? `${Math.round((totalActual / budget) * 100)}%` : '-'}
             isProgress
+            progressColor={isOverBudget ? 'bg-red-500' : 'bg-blue-500'}
           />
         </div>
 
@@ -375,16 +360,7 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
-function NavItem({ icon, active = false }: { icon: React.ReactNode; active?: boolean }) {
-  return (
-    <div
-      className={`p-3 rounded-xl cursor-pointer transition-all ${active ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300'
-        }`}
-    >
-      {icon}
-    </div>
-  );
-}
+
 
 function StatCard({
   title,
@@ -393,15 +369,22 @@ function StatCard({
   trend,
   trendUp = true,
   isProgress = false,
+  warning = false,
+  progressColor = 'bg-blue-500',
 }: any) {
   return (
-    <div className="bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-3xl shadow-xl hover:border-slate-700 transition-all cursor-default">
+    <div className={`bg-slate-900/40 border ${warning ? 'border-red-500/50' : 'border-slate-800'} rounded-3xl p-6 backdrop-blur-3xl shadow-xl hover:border-slate-700 transition-all cursor-default relative overflow-hidden`}>
+      {warning && (
+        <div className="absolute top-0 right-0 p-4 opacity-20">
+          <AlertCircle className="text-red-500" size={64} />
+        </div>
+      )}
       <p className="text-slate-400 text-sm font-medium mb-3">{title}</p>
       <div className="flex items-end justify-between mb-2">
-        <p className="text-4xl font-bold text-white tracking-tight">{value}</p>
+        <p className={`text-4xl font-bold tracking-tight ${warning ? 'text-red-400' : 'text-white'}`}>{value}</p>
         {!isProgress && trend && (
           <span
-            className={`px-2 py-1 rounded-lg text-xs font-bold ${trendUp ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400'
+            className={`px-2 py-1 rounded-lg text-xs font-bold ${warning ? 'bg-red-500/10 text-red-400' : (trendUp ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500/10 text-emerald-400')
               }`}
           >
             {trend}
@@ -410,7 +393,7 @@ function StatCard({
       </div>
       {isProgress ? (
         <div className="w-full h-1.5 bg-slate-800 rounded-full mt-4">
-          <div className="h-full bg-blue-500 rounded-full" style={{ width: trend }} />
+          <div className={`h-full rounded-full ${progressColor}`} style={{ width: trend }} />
         </div>
       ) : (
         <p className="text-slate-500 text-xs mt-1">{subValue}</p>

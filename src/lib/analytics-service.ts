@@ -9,7 +9,9 @@ export interface AnalyticsResult {
     rows: Array<{
         service: string;
         total: number;
-        [dateKey: string]: number | string; // Dynamic date keys
+        momAmount?: number;
+        momPercentage?: number;
+        [dateKey: string]: number | string | undefined; // Dynamic date keys
     }>;
 }
 
@@ -44,7 +46,7 @@ export async function getAnalyticsData(
 
     // Aggregation Logic
     const dateKeys = new Set<string>();
-    const serviceMap = new Map<string, { [key: string]: number }>();
+    const serviceMap = new Map<string, { total: number;[key: string]: number }>();
 
     records.forEach((record: any) => {
         let dateKey = '';
@@ -65,19 +67,58 @@ export async function getAnalyticsData(
         entry.total += record.amount;
     });
 
+    // MoM Calculation Logic
+    const previousMap = new Map<string, number>();
+
+    if (granularity === 'monthly') {
+        const prevStart = new Date(start);
+        prevStart.setMonth(prevStart.getMonth() - 1);
+
+        const prevEnd = new Date(end);
+        prevEnd.setMonth(prevEnd.getMonth() - 1);
+        // Adjust end of day
+        const prevEndOfDay = new Date(prevEnd);
+        prevEndOfDay.setHours(23, 59, 59, 999);
+
+        const prevWhereClause: any = {
+            date: {
+                gte: prevStart,
+                lte: prevEndOfDay,
+            },
+        };
+        if (accountId && accountId !== 'all') {
+            prevWhereClause.accountId = accountId;
+        }
+
+        const prevRecords = await prisma.costRecord.findMany({
+            where: prevWhereClause,
+        });
+
+        prevRecords.forEach((r: any) => {
+            previousMap.set(r.service, (previousMap.get(r.service) || 0) + r.amount);
+        });
+    }
+
     // Sort headers
     const sortedHeaders = Array.from(dateKeys).sort();
 
     // Format rows
     const rows = Array.from(serviceMap.entries()).map(([service, data]) => {
+        const currentTotal = data.total;
+        const previousTotal = previousMap.get(service) || 0;
+        const momAmount = currentTotal - previousTotal;
+        const momPercentage = previousTotal > 0 ? (momAmount / previousTotal) * 100 : 0;
+
         return {
             service,
             ...data,
-        } as { service: string; total: number;[key: string]: number | string };
+            momAmount,
+            momPercentage,
+        };
     }).sort((a, b) => b.total - a.total); // Sort by total cost descending
 
     return {
         headers: sortedHeaders,
-        rows: rows as any,
+        rows: rows,
     };
 }

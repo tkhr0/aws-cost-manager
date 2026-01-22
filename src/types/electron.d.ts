@@ -16,7 +16,14 @@ export interface IElectronAPI {
     getDashboardData: (args: { accountId?: string; month?: string }) => Promise<any>;
     getAnalyticsData: (args: { accountId?: string; startDate: string; endDate: string; granularity: 'monthly' | 'daily' }) => Promise<any>;
     calculateDetailedForecast: (args: { accountId?: string; options: any }) => Promise<any>;
+    calculateDetailedForecast: (args: { accountId?: string; options: any }) => Promise<any>;
     generateDummyData: () => Promise<any>;
+    updateAccountSettings: (args: {
+        id: string;
+        budget: number;
+        exchangeRate: number;
+        profileName?: string | null;
+    }) => Promise<any>;
 }
 
 declare global {

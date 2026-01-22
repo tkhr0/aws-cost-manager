@@ -33,6 +33,7 @@ export default function ForecastPage() {
     const [lookbackDays, setLookbackDays] = useState(30);
     const [adjustmentFactor, setAdjustmentFactor] = useState(1.0); // 1.0 = 100%
     const [additionalFixedCost, setAdditionalFixedCost] = useState(0);
+    const [period, setPeriod] = useState<'current_month' | 'next_month' | 'next_quarter'>('current_month');
 
     const [data, setData] = useState<any>(null); // ForecastResult
 
@@ -42,7 +43,7 @@ export default function ForecastPage() {
 
     useEffect(() => {
         calculateForecast();
-    }, [selectedAccount, lookbackDays, adjustmentFactor, additionalFixedCost]);
+    }, [selectedAccount, lookbackDays, adjustmentFactor, additionalFixedCost, period]);
 
     const loadAccounts = async () => {
         if (window.electron) {
@@ -60,7 +61,8 @@ export default function ForecastPage() {
                     options: {
                         lookbackDays,
                         adjustmentFactor,
-                        additionalFixedCost
+                        additionalFixedCost,
+                        period
                     }
                 });
                 setData(result);
@@ -70,6 +72,18 @@ export default function ForecastPage() {
                 setLoading(false);
             }
         }
+    };
+
+    const handleCopy = () => {
+        if (!data) return;
+        const header = ['Date', 'Type', 'Amount (USD)'].join('\t');
+        const rows = [
+            ...data.history.map((h: any) => [h.date, 'Actual', h.amount.toFixed(2)].join('\t')),
+            ...data.forecast.map((f: any) => [f.date, 'Forecast', f.amount.toFixed(2)].join('\t'))
+        ].join('\n');
+
+        navigator.clipboard.writeText(`${header}\n${rows}`);
+        alert('クリップボードにコピーしました (TSV)');
     };
 
     // Prepare chart data with proper connection
@@ -105,28 +119,9 @@ export default function ForecastPage() {
     const formatCurrency = (val: number) => `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
     return (
-        <div className="min-h-screen bg-[#020617] text-slate-200 font-sans p-8 selection:bg-blue-500/30">
+        <div className="">
             <div className="max-w-7xl mx-auto flex gap-8">
-                {/* Sidebar */}
-                <div className="hidden lg:flex fixed left-0 top-0 h-full w-20 bg-slate-900/50 border-r border-slate-800 flex-col items-center py-8 gap-8 z-50">
-                    <div className="w-12 h-12 bg-blue-600 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20">
-                        <LayoutDashboard size={24} className="text-white" />
-                    </div>
-                    <nav className="flex flex-col gap-6">
-                        <button onClick={() => router.push('/')} title="ダッシュボード">
-                            <NavItem icon={<CreditCard size={20} />} />
-                        </button>
-                        <NavItem icon={<TrendingUp size={20} />} active />
-                        <button onClick={() => router.push('/analytics')} title="詳細分析">
-                            <NavItem icon={<Table size={20} />} />
-                        </button>
-                        <button onClick={() => router.push('/settings')} title="設定">
-                            <NavItem icon={<Settings size={20} />} />
-                        </button>
-                    </nav>
-                </div>
-
-                <main className="lg:ml-20 w-full">
+                <main className="w-full">
                     <header className="mb-8">
                         <div className="flex items-center gap-2 text-blue-400 font-medium mb-1 uppercase tracking-wider text-xs">
                             <TrendingUp size={14} />
@@ -168,8 +163,8 @@ export default function ForecastPage() {
                                                     key={d}
                                                     onClick={() => setLookbackDays(d)}
                                                     className={`py-2 px-1 rounded-lg text-xs font-bold transition-all border ${lookbackDays === d
-                                                            ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
-                                                            : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
+                                                        ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
+                                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
                                                         }`}
                                                 >
                                                     過去{d}日
@@ -211,6 +206,26 @@ export default function ForecastPage() {
                                             />
                                         </div>
                                     </div>
+                                    <div className="pt-4 border-t border-slate-800">
+                                        <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">予測対象期間</label>
+                                        <select
+                                            value={period}
+                                            onChange={(e) => setPeriod(e.target.value as any)}
+                                            className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2.5"
+                                        >
+                                            <option value="current_month">今月 (残期間)</option>
+                                            <option value="next_month">翌月 (1ヶ月)</option>
+                                            <option value="next_quarter">来四半期 (3ヶ月)</option>
+                                        </select>
+                                    </div>
+
+                                    <button
+                                        onClick={handleCopy}
+                                        className="w-full mt-4 flex items-center justify-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-all font-medium text-sm"
+                                    >
+                                        <Table size={16} />
+                                        データコピー (TSV)
+                                    </button>
                                 </div>
                             </div>
 
@@ -236,8 +251,8 @@ export default function ForecastPage() {
                                         <div className="pt-2 border-t border-blue-500/20 flex justify-between items-center mt-2">
                                             <span className="text-slate-300">予算 ({formatCurrency(data.budget)}):</span>
                                             <span className={`font-bold px-2 py-0.5 rounded ${data.totalPredicted > data.budget
-                                                    ? 'bg-rose-500/20 text-rose-400'
-                                                    : 'bg-emerald-500/20 text-emerald-400'
+                                                ? 'bg-rose-500/20 text-rose-400'
+                                                : 'bg-emerald-500/20 text-emerald-400'
                                                 }`}>
                                                 {data.totalPredicted > data.budget ? '予算超過' : '予算内'}
                                                 {' '}({Math.round((data.totalPredicted / data.budget) * 100)}%)
@@ -326,13 +341,4 @@ export default function ForecastPage() {
     );
 }
 
-function NavItem({ icon, active = false }: { icon: React.ReactNode; active?: boolean }) {
-    return (
-        <div
-            className={`p-3 rounded-xl cursor-pointer transition-all ${active ? 'bg-slate-800 text-blue-400' : 'text-slate-500 hover:text-slate-300'
-                }`}
-        >
-            {icon}
-        </div>
-    );
-}
+

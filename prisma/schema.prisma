@@ -16,6 +16,9 @@ model Account {
   accountId   String       @unique
   profileName String?
   roleArn     String?
+  budget      Float        @default(0)
+  exchangeRate Float       @default(150)
+  lastSyncedAt DateTime?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
   CostRecord  CostRecord[]

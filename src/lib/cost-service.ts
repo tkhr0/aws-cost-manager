@@ -39,8 +39,8 @@ export async function syncAwsCosts(
         if (day.Groups && day.Groups.length > 0) {
             for (const group of day.Groups) {
                 const serviceName = group.Keys?.[0] || 'Unknown';
-                const unblendedCost = group.Metrics?.['UnblendedCost']?.Amount || '0';
-                const amount = parseFloat(unblendedCost);
+                const amortizedCost = group.Metrics?.['AmortizedCost']?.Amount || '0';
+                const amount = parseFloat(amortizedCost);
 
                 // Skip zero costs to save DB space
                 if (amount === 0) continue;
@@ -51,7 +51,7 @@ export async function syncAwsCosts(
                             date,
                             accountId: account.id,
                             service: serviceName,
-                            recordType: 'UnblendedCost',
+                            recordType: 'AmortizedCost',
                         },
                     },
                     update: { amount },
@@ -60,7 +60,7 @@ export async function syncAwsCosts(
                         amount,
                         accountId: account.id,
                         service: serviceName,
-                        recordType: 'UnblendedCost',
+                        recordType: 'AmortizedCost',
                     },
                 });
             }
@@ -77,5 +77,12 @@ export async function getLocalAccounts() {
 export async function addAccount(name: string, accountId: string, profileName: string) {
     return await prisma.account.create({
         data: { name, accountId, profileName },
+    });
+}
+
+export async function updateAccountSettings(id: string, budget: number, exchangeRate: number, profileName?: string | null) {
+    return await prisma.account.update({
+        where: { id },
+        data: { budget, exchangeRate, profileName },
     });
 }

@@ -107,17 +107,10 @@ export default function AnalyticsPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#020617] text-slate-200 font-sans p-8 selection:bg-blue-500/30">
+        <div className="font-sans p-8">
             <div className="max-w-7xl mx-auto">
                 <header className="mb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
                     <div>
-                        <button
-                            onClick={() => router.push('/')}
-                            className="flex items-center gap-2 text-slate-400 hover:text-slate-200 mb-4 transition-colors text-sm"
-                        >
-                            <ArrowLeft size={16} />
-                            ダッシュボードに戻る
-                        </button>
                         <h1 className="text-3xl font-bold text-white flex items-center gap-3">
                             <Table className="text-blue-400" />
                             詳細分析
@@ -198,7 +191,26 @@ export default function AnalyticsPage() {
                                 className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-all font-medium text-sm"
                             >
                                 <Download size={16} />
-                                CSVダウンロード
+                                CSV
+                            </button>
+                            <button
+                                onClick={() => {
+                                    if (!data?.rows) return;
+                                    const header = ['Service', 'Total', ...data.headers, 'MoM $', 'MoM %'].join('\t');
+                                    const body = sortedRows.map((r: any) => [
+                                        r.service,
+                                        r.total.toFixed(2),
+                                        ...data.headers.map((h: string) => r[h] !== undefined ? Number(r[h]).toFixed(2) : ''),
+                                        r.momAmount?.toFixed(2) || '0',
+                                        r.momPercentage?.toFixed(1) || '0'
+                                    ].join('\t')).join('\n');
+                                    navigator.clipboard.writeText(`${header}\n${body}`);
+                                    alert('クリップボードにコピーしました (TSV)');
+                                }}
+                                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg border border-slate-700 transition-all font-medium text-sm ml-2"
+                            >
+                                <Table size={16} />
+                                コピー
                             </button>
                         </div>
                     </div>
@@ -247,6 +259,8 @@ export default function AnalyticsPage() {
                                             </div>
                                         </th>
                                     ))}
+                                    <th scope="col" className="px-6 py-4 text-right whitespace-nowrap">前月比 ($)</th>
+                                    <th scope="col" className="px-6 py-4 text-right whitespace-nowrap">前月比 (%)</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800 bg-slate-900/20">
@@ -274,6 +288,12 @@ export default function AnalyticsPage() {
                                                         : <span className="text-slate-700">-</span>}
                                                 </td>
                                             ))}
+                                            <td className={`px-6 py-3 text-right ${row.momAmount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {row.momAmount > 0 ? '+' : ''}{row.momAmount?.toFixed(2)}
+                                            </td>
+                                            <td className={`px-6 py-3 text-right ${row.momAmount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {row.momAmount > 0 ? '+' : ''}{row.momPercentage?.toFixed(1)}%
+                                            </td>
                                         </tr>
                                     ))
                                 )}

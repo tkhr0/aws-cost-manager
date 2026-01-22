@@ -79,6 +79,12 @@ ipcMain.handle('db:addAccount', async (_, { name, accountId, profileName }) => {
   return await addAccount(name, accountId, profileName);
 });
 
+ipcMain.handle('db:updateAccountSettings', async (_, { id, budget, exchangeRate, profileName }) => {
+  // lazy import to avoid circular dep if any, though here cost-service is improved already
+  const { updateAccountSettings } = await import('../src/lib/cost-service');
+  return await updateAccountSettings(id, budget, exchangeRate, profileName);
+});
+
 ipcMain.handle('aws:exportCsv', async (_, { accountId }) => {
   return await exportToCsv(accountId);
 });
