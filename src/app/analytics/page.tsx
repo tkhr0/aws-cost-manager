@@ -19,16 +19,9 @@ export default function AnalyticsPage() {
     // Filters
     const [selectedAccount, setSelectedAccount] = useState('all');
     const [granularity, setGranularity] = useState<'monthly' | 'daily'>('monthly');
-    const [startDate, setStartDate] = useState(() => {
+    const [targetMonth, setTargetMonth] = useState(() => {
         const d = new Date();
-        d.setMonth(d.getMonth() - 5); // Default last 6 months
-        d.setDate(1);
-        return d.toISOString().split('T')[0];
-    });
-    const [endDate, setEndDate] = useState(() => {
-        const d = new Date();
-        // End of current month
-        return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
 
     // Data
@@ -43,7 +36,7 @@ export default function AnalyticsPage() {
 
     useEffect(() => {
         loadAnalyticsData();
-    }, [selectedAccount, granularity, startDate, endDate]);
+    }, [selectedAccount, granularity, targetMonth]);
 
     const loadAccounts = async () => {
         if (window.electron) {
@@ -56,10 +49,11 @@ export default function AnalyticsPage() {
         if (window.electron) {
             setLoading(true);
             try {
+                const [y, m] = targetMonth.split('-');
                 const result = await window.electron.getAnalyticsData({
                     accountId: selectedAccount,
-                    startDate,
-                    endDate,
+                    year: y,
+                    month: m,
                     granularity,
                 });
                 setData(result);
@@ -166,21 +160,11 @@ export default function AnalyticsPage() {
                         </div>
 
                         <div>
-                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">開始日</label>
+                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">対象月</label>
                             <input
-                                type="date"
-                                value={startDate}
-                                onChange={(e) => setStartDate(e.target.value)}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">終了日</label>
-                            <input
-                                type="date"
-                                value={endDate}
-                                onChange={(e) => setEndDate(e.target.value)}
+                                type="month"
+                                value={targetMonth}
+                                onChange={(e) => setTargetMonth(e.target.value)}
                                 className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
                             />
                         </div>
@@ -232,18 +216,20 @@ export default function AnalyticsPage() {
                                             )}
                                         </div>
                                     </th>
-                                    <th
-                                        scope="col"
-                                        className="px-6 py-4 text-right bg-slate-900 border-r border-slate-800 font-bold text-white cursor-pointer hover:bg-slate-800/80 transition-colors"
-                                        onClick={() => handleSort('total')}
-                                    >
-                                        <div className="flex items-center justify-end gap-1">
-                                            合計 (USD)
-                                            {sortConfig.key === 'total' && (
-                                                <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
-                                            )}
-                                        </div>
-                                    </th>
+                                    {granularity === 'daily' && (
+                                        <th
+                                            scope="col"
+                                            className="px-6 py-4 text-right bg-slate-900 border-r border-slate-800 font-bold text-white cursor-pointer hover:bg-slate-800/80 transition-colors"
+                                            onClick={() => handleSort('total')}
+                                        >
+                                            <div className="flex items-center justify-end gap-1">
+                                                合計 (USD)
+                                                {sortConfig.key === 'total' && (
+                                                    <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                                                )}
+                                            </div>
+                                        </th>
+                                    )}
                                     {data?.headers.map((header: string) => (
                                         <th
                                             key={header}
@@ -259,14 +245,36 @@ export default function AnalyticsPage() {
                                             </div>
                                         </th>
                                     ))}
-                                    <th scope="col" className="px-6 py-4 text-right whitespace-nowrap">前月比 ($)</th>
-                                    <th scope="col" className="px-6 py-4 text-right whitespace-nowrap">前月比 (%)</th>
+                                    <th
+                                        scope="col"
+                                        className="px-6 py-4 text-right whitespace-nowrap cursor-pointer hover:bg-slate-800/80 transition-colors"
+                                        onClick={() => handleSort('momAmount')}
+                                    >
+                                        <div className="flex items-center justify-end gap-1">
+                                            前月比 ($)
+                                            {sortConfig.key === 'momAmount' && (
+                                                <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                                            )}
+                                        </div>
+                                    </th>
+                                    <th
+                                        scope="col"
+                                        className="px-6 py-4 text-right whitespace-nowrap cursor-pointer hover:bg-slate-800/80 transition-colors"
+                                        onClick={() => handleSort('momPercentage')}
+                                    >
+                                        <div className="flex items-center justify-end gap-1">
+                                            前月比 (%)
+                                            {sortConfig.key === 'momPercentage' && (
+                                                <span className="text-blue-400 text-[10px]">{sortConfig.direction === 'asc' ? '▲' : '▼'}</span>
+                                            )}
+                                        </div>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800 bg-slate-900/20">
                                 {!data || data.rows.length === 0 ? (
                                     <tr>
-                                        <td colSpan={(data?.headers.length || 0) + 2} className="px-6 py-12 text-center text-slate-500">
+                                        <td colSpan={(data?.headers.length || 0) + (granularity === 'daily' ? 3 : 2)} className="px-6 py-12 text-center text-slate-500">
                                             {loading ? '読み込み中...' : 'データがありません'}
                                         </td>
                                     </tr>
@@ -278,9 +286,11 @@ export default function AnalyticsPage() {
                                                     {row.service}
                                                 </div>
                                             </th>
-                                            <td className="px-6 py-3 text-right font-bold text-white border-r border-slate-800">
-                                                ${row.total.toFixed(2)}
-                                            </td>
+                                            {granularity === 'daily' && (
+                                                <td className="px-6 py-3 text-right font-bold text-white border-r border-slate-800">
+                                                    ${row.total.toFixed(2)}
+                                                </td>
+                                            )}
                                             {data.headers.map((header: string) => (
                                                 <td key={header} className="px-6 py-3 text-right">
                                                     {row[header] !== undefined

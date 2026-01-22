@@ -95,7 +95,7 @@ ipcMain.handle('db:getDashboardData', async (_, args) => {
 
 ipcMain.handle('db:getAnalyticsData', async (_, args) => {
   const { getAnalyticsData } = await import('../src/lib/analytics-service');
-  return await getAnalyticsData(args.accountId, args.startDate, args.endDate, args.granularity);
+  return await getAnalyticsData(args.accountId, args.year, args.month, args.granularity);
 });
 
 ipcMain.handle('db:calculateDetailedForecast', async (_, args) => {

@@ -14,7 +14,7 @@ export interface IElectronAPI {
     exportCsv: (args: { accountId: string }) => Promise<{ success: boolean; filePath?: string }>;
     calculateForecast: (args: { accountId: string; month: string }) => Promise<any>;
     getDashboardData: (args: { accountId?: string; month?: string }) => Promise<any>;
-    getAnalyticsData: (args: { accountId?: string; startDate: string; endDate: string; granularity: 'monthly' | 'daily' }) => Promise<any>;
+    getAnalyticsData: (args: { accountId?: string; year: string; month: string; granularity: 'monthly' | 'daily' }) => Promise<any>;
     calculateDetailedForecast: (args: { accountId?: string; options: any }) => Promise<any>;
     calculateDetailedForecast: (args: { accountId?: string; options: any }) => Promise<any>;
     generateDummyData: () => Promise<any>;

@@ -17,21 +17,21 @@ export interface AnalyticsResult {
 
 export async function getAnalyticsData(
     accountId: string | undefined,
-    startDate: string,
-    endDate: string,
+    year: string,
+    month: string,
     granularity: AnalyticsGranularity
 ): Promise<AnalyticsResult> {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const y = parseInt(year, 10);
+    const m = parseInt(month, 10); // 1-12
 
-    // Ensure end date includes the full day
-    const endOfDay = new Date(end);
-    endOfDay.setHours(23, 59, 59, 999);
+    // Target Month (UTC)
+    const start = new Date(Date.UTC(y, m - 1, 1));
+    const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
     const whereClause: any = {
         date: {
             gte: start,
-            lte: endOfDay,
+            lte: end,
         },
     };
 
@@ -44,15 +44,17 @@ export async function getAnalyticsData(
         orderBy: { date: 'asc' },
     });
 
-    // Aggregation Logic
+    // Aggregation Logic for Current Month
     const dateKeys = new Set<string>();
     const serviceMap = new Map<string, { total: number;[key: string]: number }>();
 
     records.forEach((record: any) => {
         let dateKey = '';
         if (granularity === 'monthly') {
-            dateKey = `${record.date.getFullYear()}-${String(record.date.getMonth() + 1).padStart(2, '0')}`;
+            // For monthly granularity, we show YYYY-MM
+            dateKey = `${record.date.getUTCFullYear()}-${String(record.date.getUTCMonth() + 1).padStart(2, '0')}`;
         } else {
+            // Daily: YYYY-MM-DD
             dateKey = record.date.toISOString().split('T')[0];
         }
 
@@ -67,37 +69,29 @@ export async function getAnalyticsData(
         entry.total += record.amount;
     });
 
-    // MoM Calculation Logic
-    const previousMap = new Map<string, number>();
+    // Previous Month Logic (Strict Month-over-Month)
+    // Compare against the full previous month (1st to last day)
+    const prevStart = new Date(Date.UTC(y, m - 2, 1));
+    const prevEnd = new Date(Date.UTC(y, m - 1, 0, 23, 59, 59, 999));
 
-    if (granularity === 'monthly') {
-        const prevStart = new Date(start);
-        prevStart.setMonth(prevStart.getMonth() - 1);
-
-        const prevEnd = new Date(end);
-        prevEnd.setMonth(prevEnd.getMonth() - 1);
-        // Adjust end of day
-        const prevEndOfDay = new Date(prevEnd);
-        prevEndOfDay.setHours(23, 59, 59, 999);
-
-        const prevWhereClause: any = {
-            date: {
-                gte: prevStart,
-                lte: prevEndOfDay,
-            },
-        };
-        if (accountId && accountId !== 'all') {
-            prevWhereClause.accountId = accountId;
-        }
-
-        const prevRecords = await prisma.costRecord.findMany({
-            where: prevWhereClause,
-        });
-
-        prevRecords.forEach((r: any) => {
-            previousMap.set(r.service, (previousMap.get(r.service) || 0) + r.amount);
-        });
+    const prevWhereClause: any = {
+        date: {
+            gte: prevStart,
+            lte: prevEnd,
+        },
+    };
+    if (accountId && accountId !== 'all') {
+        prevWhereClause.accountId = accountId;
     }
+
+    const prevRecords = await prisma.costRecord.findMany({
+        where: prevWhereClause,
+    });
+
+    const previousMap = new Map<string, number>();
+    prevRecords.forEach((r: any) => {
+        previousMap.set(r.service, (previousMap.get(r.service) || 0) + r.amount);
+    });
 
     // Sort headers
     const sortedHeaders = Array.from(dateKeys).sort();
