@@ -147,62 +147,7 @@ export default function SettingsPage() {
                     {/* Edit Form (Overlay or Inline?) - Let's use inline for simplicity replacement of the list item or modal */}
                     {/* Implementing as Modal Overlay would be nicer UI but inline expansion is easier with current structure. */}
                     {/* Let's try a Modal Overlay for Edit */}
-                    {editingAccount && (
-                        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-                            <div className="bg-[#0b1221] border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
-                                <h3 className="text-xl font-bold text-white mb-6">設定変更: {editingAccount.name}</h3>
-                                <form onSubmit={handleUpdate} className="space-y-5">
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">月次予算 (USD, 税抜)</label>
-                                        <input
-                                            type="number"
-                                            value={editFormData.budget}
-                                            onChange={(e) => setEditFormData({ ...editFormData, budget: parseFloat(e.target.value) })}
-                                            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="0"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">参考為替レート (JPY/USD)</label>
-                                        <input
-                                            type="number"
-                                            value={editFormData.exchangeRate}
-                                            onChange={(e) => setEditFormData({ ...editFormData, exchangeRate: parseFloat(e.target.value) })}
-                                            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            min="1"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">AWSプロファイル名 (Optional)</label>
-                                        <input
-                                            type="text"
-                                            value={editFormData.profileName}
-                                            onChange={(e) => setEditFormData({ ...editFormData, profileName: e.target.value })}
-                                            className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                            placeholder="default (空欄なら環境変数を使用)"
-                                        />
-                                        <p className="text-xs text-slate-500 mt-1">空欄の場合、環境変数 (AWS_ACCESS_KEY_ID等) が使用されます。</p>
-                                    </div>
 
-                                    <div className="flex justify-end gap-3 mt-6">
-                                        <button
-                                            type="button"
-                                            onClick={() => setEditingAccount(null)}
-                                            className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all font-medium"
-                                        >
-                                            キャンセル
-                                        </button>
-                                        <button
-                                            type="submit"
-                                            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all font-medium"
-                                        >
-                                            保存
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    )}
 
                     <div className="space-y-3">
                         {accounts.length === 0 ? (
@@ -274,6 +219,63 @@ export default function SettingsPage() {
                     </div>
                 </div>
             </div>
+
+            {editingAccount && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                    <div className="bg-[#0b1221] border border-slate-700 rounded-2xl p-6 w-full max-w-lg shadow-2xl">
+                        <h3 className="text-xl font-bold text-white mb-6">設定変更: {editingAccount.name}</h3>
+                        <form onSubmit={handleUpdate} className="space-y-5">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">月次予算 (USD, 税抜)</label>
+                                <input
+                                    type="number"
+                                    value={editFormData.budget}
+                                    onChange={(e) => setEditFormData({ ...editFormData, budget: parseFloat(e.target.value) })}
+                                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    min="0"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">参考為替レート (JPY/USD)</label>
+                                <input
+                                    type="number"
+                                    value={editFormData.exchangeRate}
+                                    onChange={(e) => setEditFormData({ ...editFormData, exchangeRate: parseFloat(e.target.value) })}
+                                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    min="1"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">AWSプロファイル名 (Optional)</label>
+                                <input
+                                    type="text"
+                                    value={editFormData.profileName}
+                                    onChange={(e) => setEditFormData({ ...editFormData, profileName: e.target.value })}
+                                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="default (空欄なら環境変数を使用)"
+                                />
+                                <p className="text-xs text-slate-500 mt-1">空欄の場合、環境変数 (AWS_ACCESS_KEY_ID等) が使用されます。</p>
+                            </div>
+
+                            <div className="flex justify-end gap-3 mt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingAccount(null)}
+                                    className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-all font-medium"
+                                >
+                                    キャンセル
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-all font-medium"
+                                >
+                                    保存
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
