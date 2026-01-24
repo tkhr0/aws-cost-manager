@@ -16,7 +16,7 @@ export interface IElectronAPI {
     getDashboardData: (args: { accountId?: string; month?: string }) => Promise<any>;
     getAnalyticsData: (args: { accountId?: string; year: string; month: string; granularity: 'monthly' | 'daily' }) => Promise<any>;
     calculateDetailedForecast: (args: { accountId?: string; options: any }) => Promise<any>;
-    calculateDetailedForecast: (args: { accountId?: string; options: any }) => Promise<any>;
+    getAvailableMonths: (args: { accountId?: string }) => Promise<string[]>;
     generateDummyData: () => Promise<any>;
     updateAccountSettings: (args: {
         id: string;

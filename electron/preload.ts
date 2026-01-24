@@ -9,5 +9,6 @@ contextBridge.exposeInMainWorld('electron', {
     getDashboardData: (args: any) => ipcRenderer.invoke('db:getDashboardData', args),
     getAnalyticsData: (args: any) => ipcRenderer.invoke('db:getAnalyticsData', args),
     calculateDetailedForecast: (args: any) => ipcRenderer.invoke('db:calculateDetailedForecast', args),
+    getAvailableMonths: (args: any) => ipcRenderer.invoke('db:getAvailableMonths', args),
     generateDummyData: () => ipcRenderer.invoke('db:generateDummy'),
 });

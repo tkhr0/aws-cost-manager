@@ -37,7 +37,7 @@ const createWindow = () => {
     console.log('Window finished loading');
   });
 
-  if (isDev) {
+  if (isDev && process.env.NODE_ENV !== 'test') {
     mainWindow.webContents.openDevTools();
   }
 
@@ -101,6 +101,11 @@ ipcMain.handle('db:getAnalyticsData', async (_, args) => {
 ipcMain.handle('db:calculateDetailedForecast', async (_, args) => {
   const { calculateDetailedForecast } = await import('../src/lib/forecast-service');
   return await calculateDetailedForecast(args.accountId, args.options);
+});
+
+ipcMain.handle('db:getAvailableMonths', async (_, args) => {
+  const { getAvailableMonths } = await import('../src/lib/cost-service');
+  return await getAvailableMonths(args?.accountId);
 });
 
 import { generateDummyData } from '../src/lib/seed-service';

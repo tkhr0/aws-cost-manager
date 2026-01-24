@@ -36,10 +36,15 @@ export default function Home() {
   const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
   const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
 
   useEffect(() => {
     loadData();
   }, [selectedMonth, selectedAccount]);
+
+  useEffect(() => {
+    loadAvailableMonths();
+  }, [selectedAccount]);
 
   const loadData = async () => {
     if (window.electron) {
@@ -118,6 +123,29 @@ export default function Home() {
     }
   };
 
+  const loadAvailableMonths = async () => {
+    if (window.electron) {
+      try {
+        const months = await window.electron.getAvailableMonths({ accountId: selectedAccount });
+        if (months && months.length > 0) {
+          setAvailableMonths(months);
+          if (!months.includes(selectedMonth)) {
+            setSelectedMonth(months[0]);
+          }
+        } else {
+          const fallbackMonths = Array.from({ length: 12 }).map((_, i) => {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          });
+          setAvailableMonths(fallbackMonths);
+        }
+      } catch (e) {
+        console.error('Failed to load available months', e);
+      }
+    }
+  };
+
   const totalActual = dashboardData?.records?.reduce((sum: number, r: any) => sum + r.amount, 0) || 0;
   const budget = dashboardData?.budget || 0;
   const forecast = dashboardData?.forecast || 0;
@@ -158,16 +186,11 @@ export default function Home() {
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
             >
-              {Array.from({ length: 12 }).map((_, i) => {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                return (
-                  <option key={val} value={val}>
-                    {d.getFullYear()}年{d.getMonth() + 1}月
-                  </option>
-                );
-              })}
+              {availableMonths.map((m) => (
+                <option key={m} value={m}>
+                  {m.split('-')[0]}年{Number(m.split('-')[1])}月
+                </option>
+              ))}
             </select>
 
             {/* Account Selector */}
