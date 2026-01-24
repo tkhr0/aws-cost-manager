@@ -22,8 +22,9 @@ const createWindow = () => {
   const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
   console.log('Main process starting...', { isDev, NODE_ENV: process.env.NODE_ENV });
 
+  const port = process.env.PORT || 3000;
   const startUrl = isDev
-    ? 'http://localhost:3000'
+    ? `http://localhost:${port}`
     : `file://${path.join(__dirname, '../out/index.html')}`;
 
   console.log('Loading URL:', startUrl);

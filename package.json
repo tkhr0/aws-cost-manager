@@ -5,7 +5,7 @@
   "main": "dist-electron/electron/main.js",
   "scripts": {
     "dev:next": "next dev",
-    "dev:electron": "tsc -p electron/tsconfig.json && (concurrently \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:3000 && cross-env NODE_ENV=development electron .\")",
+    "dev:electron": "tsc -p electron/tsconfig.json && (concurrently \"tsc -p electron/tsconfig.json -w\" \"wait-on tcp:${PORT:-3000} && cross-env NODE_ENV=development electron .\")",
     "dev": "concurrently \"npm run dev:next\" \"npm run dev:electron\"",
     "build:next": "next build",
     "build:electron": "tsc -p electron/tsconfig.json",
