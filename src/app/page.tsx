@@ -24,6 +24,8 @@ import {
   Table,
 } from 'lucide-react';
 
+import { fillDailyCosts } from '@/lib/date-utils';
+
 export default function Home() {
   const router = useRouter();
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -57,11 +59,13 @@ export default function Home() {
         setDashboardData(data);
 
         // Transform records to chart data
-        if (data.records && data.records.length > 0) {
-          const chartPoints = data.records.map((r: any) => ({
-            name: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            amount: r.amount,
-          }));
+        if (data.records) {
+          const [year, month] = selectedMonth.split('-');
+          const chartPoints = fillDailyCosts(
+            data.records,
+            parseInt(year),
+            parseInt(month)
+          );
           setChartData(chartPoints);
         }
       } catch (err: any) {
