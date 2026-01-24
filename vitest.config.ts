@@ -10,7 +10,7 @@ export default defineConfig({
         alias: {
             '@': path.resolve(__dirname, './src'),
         },
-        exclude: ['node_modules', 'dist-electron', '.next'],
+        exclude: ['node_modules', 'dist-electron', '.next', 'e2e'],
         setupFiles: ['./src/lib/test/setup.ts'],
     },
 });
