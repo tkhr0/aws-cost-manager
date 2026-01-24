@@ -1,6 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+type CostRecordRow = Prisma.CostRecordGetPayload<object>;
 
 export type AnalyticsGranularity = 'monthly' | 'daily';
 
@@ -28,7 +30,7 @@ export async function getAnalyticsData(
     const start = new Date(Date.UTC(y, m - 1, 1));
     const end = new Date(Date.UTC(y, m, 0, 23, 59, 59, 999));
 
-    const whereClause: any = {
+    const whereClause: Prisma.CostRecordWhereInput = {
         date: {
             gte: start,
             lte: end,
@@ -48,7 +50,7 @@ export async function getAnalyticsData(
     const dateKeys = new Set<string>();
     const serviceMap = new Map<string, { total: number;[key: string]: number }>();
 
-    records.forEach((record: any) => {
+    records.forEach((record: CostRecordRow) => {
         let dateKey = '';
         if (granularity === 'monthly') {
             // For monthly granularity, we show YYYY-MM
@@ -74,7 +76,7 @@ export async function getAnalyticsData(
     const prevStart = new Date(Date.UTC(y, m - 2, 1));
     const prevEnd = new Date(Date.UTC(y, m - 1, 0, 23, 59, 59, 999));
 
-    const prevWhereClause: any = {
+    const prevWhereClause: Prisma.CostRecordWhereInput = {
         date: {
             gte: prevStart,
             lte: prevEnd,
@@ -89,7 +91,7 @@ export async function getAnalyticsData(
     });
 
     const previousMap = new Map<string, number>();
-    prevRecords.forEach((r: any) => {
+    prevRecords.forEach((r: CostRecordRow) => {
         previousMap.set(r.service, (previousMap.get(r.service) || 0) + r.amount);
     });
 

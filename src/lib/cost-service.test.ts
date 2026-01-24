@@ -1,8 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { syncAwsCosts } from './cost-service';
-import { AwsCostClient } from './aws-client';
-import { PrismaClient } from '@prisma/client';
 
 // Mock dependencies
 // Define mockGetCostAndUsage in outer scope or setup in test

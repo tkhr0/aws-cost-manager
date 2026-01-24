@@ -20,17 +20,18 @@ export async function syncAwsCosts(
         throw new Error(`Account ${accountId} not found in database. Please configure it first.`);
     }
 
-    // Fetch from AWS with SERVICE grouping
     // Granularity 'DAILY' and grouping by 'SERVICE'
     const filter = {
-        And: [{ Dimensions: { Key: 'RECORD_TYPE', Values: ['Usage', 'Recurring', 'Tax', 'Amortized'] } }],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        And: [{ Dimensions: { Key: 'RECORD_TYPE' as any, Values: ['Usage', 'Recurring', 'Tax', 'Amortized'] } }],
     };
 
     const results = await awsClient.getCostAndUsage(
         startDate,
         endDate,
         'DAILY',
-        { Type: 'DIMENSION', Key: 'SERVICE' } // GroupBy
+        { Type: 'DIMENSION', Key: 'SERVICE' }, // GroupBy
+        filter
     );
 
     for (const day of results) {

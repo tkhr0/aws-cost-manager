@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import {
   AreaChart,
   Area,
@@ -16,21 +15,17 @@ import {
 import {
   Download,
   RefreshCcw,
-  LayoutDashboard,
-  Settings,
-  CreditCard,
   TrendingUp,
   AlertCircle,
-  Table,
 } from 'lucide-react';
+import { Account, DashboardData } from '@/types';
 
 export default function Home() {
-  const router = useRouter();
-  const [accounts, setAccounts] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [status, setStatus] = useState<string>('');
   const [loading, setLoading] = useState(false);
-  const [dashboardData, setDashboardData] = useState<any>(null);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [dashboardData, setDashboardData] = useState<DashboardData | null>(null);
+  const [chartData, setChartData] = useState<{ name: string; amount: number }[]>([]);
 
   // Filters
   const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
@@ -52,21 +47,22 @@ export default function Home() {
         const data = await window.electron.getDashboardData({
           accountId: selectedAccount,
           month: selectedMonth
-        });
+        }) as DashboardData;
         console.log('[Dashboard] Received data:', data);
         setDashboardData(data);
 
         // Transform records to chart data
         if (data.records && data.records.length > 0) {
-          const chartPoints = data.records.map((r: any) => ({
+          const chartPoints = data.records.map((r) => ({
             name: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
             amount: r.amount,
           }));
           setChartData(chartPoints);
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
         console.error('[Dashboard] Error loading data:', err);
-        setStatus(`Error loading data: ${err.message}`);
+        setStatus(`Error loading data: ${message}`);
       }
     }
   };
@@ -87,7 +83,7 @@ export default function Home() {
 
       const result = await window.electron.syncCosts({
         accountId: accounts[0].accountId,
-        profileName: accounts[0].profileName,
+        profileName: accounts[0].profileName ?? '',
         startDate,
         endDate,
       });
@@ -96,8 +92,9 @@ export default function Home() {
 
       // Reload dashboard data
       await loadData();
-    } catch (e: any) {
-      setStatus(`エラー: ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setStatus(`エラー: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -113,12 +110,13 @@ export default function Home() {
       if (result.success) {
         setStatus(`${result.filePath} に出力しました。`);
       }
-    } catch (e: any) {
-      setStatus(`出力エラー: ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      setStatus(`出力エラー: ${message}`);
     }
   };
 
-  const totalActual = dashboardData?.records?.reduce((sum: number, r: any) => sum + r.amount, 0) || 0;
+  const totalActual = dashboardData?.records?.reduce((sum, r) => sum + r.amount, 0) || 0;
   const budget = dashboardData?.budget || 0;
   const forecast = dashboardData?.forecast || 0;
   const exchangeRate = dashboardData?.exchangeRate || 150;
@@ -309,7 +307,7 @@ export default function Home() {
   );
 }
 
-function ServiceTable({ data }: { data: any[] }) {
+function ServiceTable({ data }: { data: { name: string; amount: number; percentage: number; sparkline: number[] }[] }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left border-collapse">
@@ -362,6 +360,17 @@ function Sparkline({ data }: { data: number[] }) {
 
 
 
+interface StatCardProps {
+  title: string;
+  value: string;
+  subValue?: string;
+  trend?: string;
+  trendUp?: boolean;
+  isProgress?: boolean;
+  warning?: boolean;
+  progressColor?: string;
+}
+
 function StatCard({
   title,
   value,
@@ -371,7 +380,7 @@ function StatCard({
   isProgress = false,
   warning = false,
   progressColor = 'bg-blue-500',
-}: any) {
+}: StatCardProps) {
   return (
     <div className={`bg-slate-900/40 border ${warning ? 'border-red-500/50' : 'border-slate-800'} rounded-3xl p-6 backdrop-blur-3xl shadow-xl hover:border-slate-700 transition-all cursor-default relative overflow-hidden`}>
       {warning && (
@@ -398,17 +407,6 @@ function StatCard({
       ) : (
         <p className="text-slate-500 text-xs mt-1">{subValue}</p>
       )}
-    </div>
-  );
-}
-
-function InsightItem({ icon, text }: any) {
-  return (
-    <div className="flex gap-3 p-4 bg-slate-900/30 rounded-2xl border border-slate-800/50 hover:bg-slate-900/50 transition-all group">
-      <div className="mt-0.5">{icon}</div>
-      <p className="text-sm text-slate-300 group-hover:text-slate-200 transition-colors leading-snug">
-        {text}
-      </p>
     </div>
   );
 }

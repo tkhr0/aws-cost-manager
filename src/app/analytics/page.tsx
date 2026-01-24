@@ -1,20 +1,30 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import {
-    ArrowLeft,
     RefreshCcw,
     Download,
-    Filter,
     Table,
 } from 'lucide-react';
+import { Account } from '@/types';
+
+interface AnalyticsRow {
+    service: string;
+    total: number;
+    momAmount?: number;
+    momPercentage?: number;
+    [key: string]: string | number | undefined;
+}
+
+interface AnalyticsData {
+    headers: string[];
+    rows: AnalyticsRow[];
+}
 
 export default function AnalyticsPage() {
-    const router = useRouter();
-    const [accounts, setAccounts] = useState<any[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(false);
-    const [status, setStatus] = useState('');
 
     // Filters
     const [selectedAccount, setSelectedAccount] = useState('all');
@@ -25,7 +35,7 @@ export default function AnalyticsPage() {
     });
 
     // Data
-    const [data, setData] = useState<any>(null); // { headers: string[], rows: any[] }
+    const [data, setData] = useState<AnalyticsData | null>(null);
 
     // Sorting
     const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' }>({ key: 'total', direction: 'desc' });
@@ -56,10 +66,9 @@ export default function AnalyticsPage() {
                     month: m,
                     granularity,
                 });
-                setData(result);
-            } catch (error: any) {
-                setStatus(`取得エラー: ${error.message}`);
-                console.error(error);
+                setData(result as AnalyticsData);
+            } catch (error: unknown) {
+                console.error('取得エラー:', error);
             } finally {
                 setLoading(false);
             }
@@ -181,12 +190,12 @@ export default function AnalyticsPage() {
                                 onClick={() => {
                                     if (!data?.rows) return;
                                     const header = ['Service', 'Total', ...data.headers, 'MoM $', 'MoM %'].join('\t');
-                                    const body = sortedRows.map((r: any) => [
+                                    const body = sortedRows.map((r) => [
                                         r.service,
-                                        r.total.toFixed(2),
+                                        (r.total as number).toFixed(2),
                                         ...data.headers.map((h: string) => r[h] !== undefined ? Number(r[h]).toFixed(2) : ''),
-                                        r.momAmount?.toFixed(2) || '0',
-                                        r.momPercentage?.toFixed(1) || '0'
+                                        ((r.momAmount as number | undefined)?.toFixed(2)) || '0',
+                                        ((r.momPercentage as number | undefined)?.toFixed(1)) || '0'
                                     ].join('\t')).join('\n');
                                     navigator.clipboard.writeText(`${header}\n${body}`);
                                     alert('クリップボードにコピーしました (TSV)');
@@ -279,7 +288,7 @@ export default function AnalyticsPage() {
                                         </td>
                                     </tr>
                                 ) : (
-                                    sortedRows.map((row: any, i: number) => (
+                                    sortedRows.map((row, i: number) => (
                                         <tr key={i} className="hover:bg-slate-800/50 transition-colors group">
                                             <th scope="row" className="px-6 py-3 font-medium text-slate-200 whitespace-nowrap sticky left-0 bg-[#0b1221] group-hover:bg-[#162032] border-r border-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.5)] z-10">
                                                 <div className="truncate w-60" title={row.service}>
@@ -298,11 +307,11 @@ export default function AnalyticsPage() {
                                                         : <span className="text-slate-700">-</span>}
                                                 </td>
                                             ))}
-                                            <td className={`px-6 py-3 text-right ${row.momAmount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                {row.momAmount > 0 ? '+' : ''}{row.momAmount?.toFixed(2)}
+                                            <td className={`px-6 py-3 text-right ${(row.momAmount ?? 0) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {(row.momAmount ?? 0) > 0 ? '+' : ''}{row.momAmount?.toFixed(2) ?? '0'}
                                             </td>
-                                            <td className={`px-6 py-3 text-right ${row.momAmount > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
-                                                {row.momAmount > 0 ? '+' : ''}{row.momPercentage?.toFixed(1)}%
+                                            <td className={`px-6 py-3 text-right ${(row.momAmount ?? 0) > 0 ? 'text-red-400' : 'text-emerald-400'}`}>
+                                                {(row.momAmount ?? 0) > 0 ? '+' : ''}{row.momPercentage?.toFixed(1) ?? '0'}%
                                             </td>
                                         </tr>
                                     ))

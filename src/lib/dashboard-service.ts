@@ -1,6 +1,9 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+type CostRecordRow = Prisma.CostRecordGetPayload<object>;
+type AccountRow = Prisma.AccountGetPayload<object>;
 
 export async function getDashboardData(accountId?: string, month?: string) {
     const whereClause = accountId && accountId !== 'all' ? { accountId } : {};
@@ -39,9 +42,9 @@ export async function getDashboardData(accountId?: string, month?: string) {
 
     // Aggregate by Service
     const serviceMap = new Map<string, { total: number; daily: Map<string, number> }>();
-    const totalCost = records.reduce((sum: number, r: any) => sum + r.amount, 0);
+    const totalCost = records.reduce((sum: number, r: CostRecordRow) => sum + r.amount, 0);
 
-    records.forEach((r: any) => {
+    records.forEach((r: CostRecordRow) => {
         // Only aggregate actual usage cost, filter out 'Total' if we have mixed data,
         // AND filter out our own aggregated 'Total' records if they exist, to avoid double counting.
         // However, currently we are overwriting 'Total' or inserting 'ServiceName'.
@@ -84,7 +87,7 @@ export async function getDashboardData(accountId?: string, month?: string) {
     // Let's construct a daily aggregated chart data from the service breakdown to be consistent.
 
     const dailyAggregated = new Map<string, number>();
-    records.forEach((r: any) => {
+    records.forEach((r: CostRecordRow) => {
         if (r.service === 'Total') return;
         if (r.service === 'Tax') return;
         const dateKey = r.date.toISOString().split('T')[0];
@@ -130,7 +133,7 @@ export async function getDashboardData(accountId?: string, month?: string) {
         const accounts = await prisma.account.findMany();
         if (!budgetOverride) {
             // Sum of base budgets
-            budget = accounts.reduce((sum: number, a: any) => sum + a.budget, 0);
+            budget = accounts.reduce((sum: number, a: AccountRow) => sum + a.budget, 0);
         }
         // Use average or first account rate?
         if (accounts.length > 0) {

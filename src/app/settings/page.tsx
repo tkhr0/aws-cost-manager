@@ -1,12 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Settings, Plus, Trash2, ArrowLeft } from 'lucide-react';
-import { useRouter } from 'next/navigation';
+import { Settings, Plus, Trash2 } from 'lucide-react';
+import { Account } from '@/types';
+
 
 export default function SettingsPage() {
-    const router = useRouter();
-    const [accounts, setAccounts] = useState<any[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
     const [showAddForm, setShowAddForm] = useState(false);
     const [formData, setFormData] = useState({
         name: '',
@@ -35,7 +35,7 @@ export default function SettingsPage() {
         }
     };
 
-    const [editingAccount, setEditingAccount] = useState<any>(null);
+    const [editingAccount, setEditingAccount] = useState<Account | null>(null);
     const [editFormData, setEditFormData] = useState({
         id: '',
         budget: 0,
@@ -43,7 +43,7 @@ export default function SettingsPage() {
         profileName: '',
     });
 
-    const handleEditClick = (account: any) => {
+    const handleEditClick = (account: Account) => {
         setEditingAccount(account);
         setEditFormData({
             id: account.id,
