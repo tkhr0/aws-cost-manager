@@ -75,3 +75,50 @@ npm test
 ```bash
 npm run test:e2e
 ```
+
+## データベース (Prisma)
+
+本アプリケーションは SQLite + Prisma を使用してデータを永続化しています。
+
+### スキーマ定義
+
+`prisma/schema.prisma` に定義されています。主なモデル：
+
+*   **Account**: 管理対象の AWS アカウント情報
+*   **CostRecord**: 日別・サービス別のコストデータ
+*   **Budget**: 月次予算
+*   **Forecast**: 予測コスト
+*   **AmortizationRule**: 償却ルール
+
+### マイグレーション
+
+スキーマを変更した場合は、以下のコマンドでマイグレーションを作成・適用します。
+
+```bash
+npx prisma migrate dev --name <migration_name>
+```
+
+### クライアント生成
+
+スキーマ変更後、Prisma Client を再生成する場合：
+
+```bash
+npx prisma generate
+```
+
+### データベースの確認 (Prisma Studio)
+
+GUI でデータベースの内容を確認・編集できます。
+
+```bash
+npx prisma studio
+```
+
+### 環境変数
+
+データベースの接続先は `DATABASE_URL` 環境変数で設定します。
+
+```bash
+# .env
+DATABASE_URL="file:./prisma/dev.db"
+```
