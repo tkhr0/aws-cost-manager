@@ -1,9 +1,14 @@
 import { execSync } from 'child_process';
-import { beforeEach } from 'vitest';
+import { beforeEach, afterAll } from 'vitest';
 import { PrismaClient } from '@prisma/client';
+import fs from 'fs';
+import path from 'path';
 
-// Use a file-based SQLite db for testing
-process.env.DATABASE_URL = "file:./test.db";
+// Generate a unique database file for each test run to prevent conflicts
+const randomSuffix = Math.random().toString(36).substring(2, 10);
+const testDbName = `test_${randomSuffix}.db`;
+const testDbPath = path.join(__dirname, '../../../prisma', testDbName);
+process.env.DATABASE_URL = `file:${testDbPath}`;
 
 const prisma = new PrismaClient();
 
@@ -37,4 +42,23 @@ beforeEach(async () => {
 
     // Re-enable foreign keys
     await prisma.$executeRawUnsafe('PRAGMA foreign_keys = ON;');
+});
+
+afterAll(async () => {
+    // Disconnect Prisma and clean up the test database file
+    await prisma.$disconnect();
+
+    try {
+        if (fs.existsSync(testDbPath)) {
+            fs.unlinkSync(testDbPath);
+            console.log(`Cleaned up test database: ${testDbName}`);
+        }
+        // Also clean up journal files if they exist
+        const journalPath = `${testDbPath}-journal`;
+        if (fs.existsSync(journalPath)) {
+            fs.unlinkSync(journalPath);
+        }
+    } catch (error) {
+        console.log(`Could not clean up test database: ${error}`);
+    }
 });
