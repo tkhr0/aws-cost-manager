@@ -1,7 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { calculateDetailedForecast, ForecastOptions } from './forecast-service';
-import { PrismaClient } from '@prisma/client';
 
 // Mock Prisma
 const { mockFindMany, mockFindFirst } = vi.hoisted(() => {

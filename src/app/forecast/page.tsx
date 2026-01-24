@@ -1,14 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+
 import {
-    ArrowLeft,
-    RefreshCcw,
     TrendingUp,
     Settings,
-    CreditCard,
-    LayoutDashboard,
     Table,
 } from 'lucide-react';
 import {
@@ -19,14 +15,24 @@ import {
     CartesianGrid,
     Tooltip,
     ResponsiveContainer,
-    ReferenceLine,
-    ComposedChart,
-    Line
 } from 'recharts';
+import { Account } from '@/types';
+
+interface ForecastPoint {
+    date: string;
+    amount: number;
+}
+
+interface ForecastData {
+    history: ForecastPoint[];
+    forecast: ForecastPoint[];
+    totalPredicted: number;
+    currentTotal: number;
+    budget: number;
+}
 
 export default function ForecastPage() {
-    const router = useRouter();
-    const [accounts, setAccounts] = useState<any[]>([]);
+    const [accounts, setAccounts] = useState<Account[]>([]);
     const [loading, setLoading] = useState(false);
     // Filters & Simulation Options
     const [selectedAccount, setSelectedAccount] = useState('all');
@@ -35,7 +41,7 @@ export default function ForecastPage() {
     const [additionalFixedCost, setAdditionalFixedCost] = useState(0);
     const [period, setPeriod] = useState<'current_month' | 'next_month' | 'next_quarter'>('current_month');
 
-    const [data, setData] = useState<any>(null); // ForecastResult
+    const [data, setData] = useState<ForecastData | null>(null);
 
     useEffect(() => {
         loadAccounts();
@@ -65,7 +71,7 @@ export default function ForecastPage() {
                         period
                     }
                 });
-                setData(result);
+                setData(result as ForecastData);
             } catch (error) {
                 console.error(error);
             } finally {
@@ -78,19 +84,24 @@ export default function ForecastPage() {
         if (!data) return;
         const header = ['Date', 'Type', 'Amount (USD)'].join('\t');
         const rows = [
-            ...data.history.map((h: any) => [h.date, 'Actual', h.amount.toFixed(2)].join('\t')),
-            ...data.forecast.map((f: any) => [f.date, 'Forecast', f.amount.toFixed(2)].join('\t'))
+            ...data.history.map((h) => [h.date, 'Actual', h.amount.toFixed(2)].join('\t')),
+            ...data.forecast.map((f) => [f.date, 'Forecast', f.amount.toFixed(2)].join('\t'))
         ].join('\n');
 
         navigator.clipboard.writeText(`${header}\n${rows}`);
         alert('クリップボードにコピーしました (TSV)');
     };
 
+    interface ChartDataPoint {
+        date: string;
+        actual: number | null;
+        forecast: number | null;
+    }
     // Prepare chart data with proper connection
-    let chartData: any[] = [];
+    let chartData: ChartDataPoint[] = [];
     if (data) {
         // 1. Add History (Actuals)
-        chartData = data.history.map((h: any) => ({
+        chartData = data.history.map((h) => ({
             date: h.date,
             actual: h.amount,
             forecast: null
@@ -107,7 +118,7 @@ export default function ForecastPage() {
         }
 
         // 3. Add Forecast (Future)
-        data.forecast.forEach((f: any) => {
+        data.forecast.forEach((f) => {
             chartData.push({
                 date: f.date,
                 actual: null,
@@ -210,7 +221,7 @@ export default function ForecastPage() {
                                         <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">予測対象期間</label>
                                         <select
                                             value={period}
-                                            onChange={(e) => setPeriod(e.target.value as any)}
+                                            onChange={(e) => setPeriod(e.target.value as 'current_month' | 'next_month' | 'next_quarter')}
                                             className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2.5"
                                         >
                                             <option value="current_month">今月 (残期間)</option>
@@ -306,9 +317,9 @@ export default function ForecastPage() {
                                             }}
                                             itemStyle={{ color: '#f8fafc' }}
                                             labelFormatter={(label) => new Date(label as string).toLocaleDateString()}
-                                            formatter={(value: any, name: any, props: any) => {
+                                            formatter={(value: number | undefined, name?: string) => {
                                                 const label = name === 'actual' ? '実績' : '予測';
-                                                return [`$${Number(value).toFixed(2)}`, label];
+                                                return value != null ? [`$${Number(value).toFixed(2)}`, label] : ['', label];
                                             }}
                                         />
 

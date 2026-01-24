@@ -15,7 +15,7 @@ test('forecast page loads and displays key elements', async ({ page }) => {
 
     // Verify target period options
     // The value is in a select box, checking if select exists
-    const periodSelect = page.locator('select').nth(1); // Assuming 2nd select, or check label
+    page.locator('select').nth(1); // Assuming 2nd select, or check label
     await expect(page.getByText('予測対象期間')).toBeVisible();
 
     // Check chart title

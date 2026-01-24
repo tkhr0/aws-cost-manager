@@ -1,8 +1,10 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 import { dialog } from 'electron';
 import fs from 'fs';
 
 const prisma = new PrismaClient();
+
+type CostRecordRow = Prisma.CostRecordGetPayload<object>;
 
 export async function exportToCsv(accountId: string) {
     const records = await prisma.costRecord.findMany({
@@ -16,7 +18,7 @@ export async function exportToCsv(accountId: string) {
 
     const header = 'Date,Service,Amount,Type\n';
     const rows = records.map(
-        (r: any) => `${r.date.toISOString().split('T')[0]},${r.service},${r.amount},${r.recordType}`
+        (r: CostRecordRow) => `${r.date.toISOString().split('T')[0]},${r.service},${r.amount},${r.recordType}`
     ).join('\n');
 
     const csvContent = header + rows;

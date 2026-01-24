@@ -1,6 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+type CostRecordRow = Prisma.CostRecordGetPayload<object>;
 
 export interface ForecastOptions {
     lookbackDays: number; // 7, 14, 30, 60
@@ -41,7 +43,7 @@ export async function calculateDetailedForecast(
     }
 
     // 1. Get actuals for the TARGET period
-    const whereClause: any = {
+    const whereClause: Prisma.CostRecordWhereInput = {
         date: {
             gte: targetStart,
             lte: targetEnd,
@@ -58,8 +60,8 @@ export async function calculateDetailedForecast(
 
     // Aggregate by date
     const dailyMap = new Map<string, number>();
-    currentMonthRecords.forEach((r: any) => {
-        if (r.service === 'Total' && currentMonthRecords.some((cr: any) => cr.service !== 'Total')) return;
+    currentMonthRecords.forEach((r: CostRecordRow) => {
+        if (r.service === 'Total' && currentMonthRecords.some((cr: CostRecordRow) => cr.service !== 'Total')) return;
         const dKey = r.date.toISOString().split('T')[0];
         dailyMap.set(dKey, (dailyMap.get(dKey) || 0) + r.amount);
     });
@@ -74,7 +76,7 @@ export async function calculateDetailedForecast(
     const lookbackStart = new Date();
     lookbackStart.setDate(lookbackStart.getDate() - options.lookbackDays);
 
-    const lookbackWhere: any = {
+    const lookbackWhere: Prisma.CostRecordWhereInput = {
         date: {
             gte: lookbackStart,
             lt: new Date(),
@@ -89,8 +91,8 @@ export async function calculateDetailedForecast(
     });
 
     const lookbackTotal = lookbackRecords
-        .filter((r: any) => !(r.service === 'Total' && lookbackRecords.some((lr: any) => lr.service !== 'Total')))
-        .reduce((sum: number, r: any) => sum + r.amount, 0);
+        .filter((r: CostRecordRow) => !(r.service === 'Total' && lookbackRecords.some((lr: CostRecordRow) => lr.service !== 'Total')))
+        .reduce((sum: number, r: CostRecordRow) => sum + r.amount, 0);
 
     const dailyAverage = lookbackTotal / options.lookbackDays;
     const adjustedDaily = dailyAverage * options.adjustmentFactor;
