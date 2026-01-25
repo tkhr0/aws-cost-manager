@@ -33,6 +33,7 @@ export default function AnalyticsPage() {
         const d = new Date();
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
     });
+    const [availableMonths, setAvailableMonths] = useState<string[]>([]);
 
     // Data
     const [data, setData] = useState<AnalyticsData | null>(null);
@@ -47,6 +48,33 @@ export default function AnalyticsPage() {
     useEffect(() => {
         loadAnalyticsData();
     }, [selectedAccount, granularity, targetMonth]);
+
+    useEffect(() => {
+        loadAvailableMonths();
+    }, [selectedAccount]);
+
+    const loadAvailableMonths = async () => {
+        if (window.electron) {
+            try {
+                const months = await window.electron.getAvailableMonths({ accountId: selectedAccount });
+                if (months && months.length > 0) {
+                    setAvailableMonths(months);
+                    if (!months.includes(targetMonth)) {
+                        setTargetMonth(months[0]);
+                    }
+                } else {
+                    const fallbackMonths = Array.from({ length: 12 }).map((_, i) => {
+                        const d = new Date();
+                        d.setMonth(d.getMonth() - i);
+                        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+                    });
+                    setAvailableMonths(fallbackMonths);
+                }
+            } catch (e) {
+                console.error('Failed to load available months', e);
+            }
+        }
+    };
 
     const loadAccounts = async () => {
         if (window.electron) {
@@ -170,12 +198,17 @@ export default function AnalyticsPage() {
 
                         <div>
                             <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">対象月</label>
-                            <input
-                                type="month"
+                            <select
                                 value={targetMonth}
                                 onChange={(e) => setTargetMonth(e.target.value)}
-                                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5"
-                            />
+                                className="bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 w-40"
+                            >
+                                {availableMonths.map((m) => (
+                                    <option key={m} value={m}>
+                                        {m.split('-')[0]}年{Number(m.split('-')[1])}月
+                                    </option>
+                                ))}
+                            </select>
                         </div>
 
                         <div className="ml-auto self-end">
