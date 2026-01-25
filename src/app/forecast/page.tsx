@@ -39,7 +39,7 @@ export default function ForecastPage() {
     const [lookbackDays, setLookbackDays] = useState(30);
     const [adjustmentFactor, setAdjustmentFactor] = useState(1.0); // 1.0 = 100%
     const [additionalFixedCost, setAdditionalFixedCost] = useState(0);
-    const [period, setPeriod] = useState<'current_month' | 'next_month' | 'next_quarter'>('current_month');
+    const [period, setPeriod] = useState<'current_month' | 'next_month' | 'next_quarter' | 'next_6_months' | 'next_12_months' | 'next_24_months'>('current_month');
 
     const [data, setData] = useState<ForecastData | null>(null);
 
@@ -62,10 +62,11 @@ export default function ForecastPage() {
         if (window.electron) {
             setLoading(true);
             try {
+                // @ts-ignore - types might not be fully synced in IDE, but runtime accepts string
                 const result = await window.electron.calculateDetailedForecast({
                     accountId: selectedAccount,
                     options: {
-                        lookbackDays,
+                        // lookbackDays, // Removed from API logic, deemed internal
                         adjustmentFactor,
                         additionalFixedCost,
                         period
@@ -139,7 +140,7 @@ export default function ForecastPage() {
                             <span>Forecast Simulation</span>
                         </div>
                         <h1 className="text-3xl font-bold text-white mb-2">着地見込シミュレーション</h1>
-                        <p className="text-slate-400 text-sm">過去の傾向と変動要因に基づき、今月の着地見込を試算します。</p>
+                        <p className="text-slate-400 text-sm">過去1年間の傾向（線形回帰）に基づき、将来のコスト費用を予測します。</p>
                     </header>
 
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -166,27 +167,11 @@ export default function ForecastPage() {
                                         </select>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">参照期間 (日次平均算出用)</label>
-                                        <div className="grid grid-cols-4 gap-2">
-                                            {[7, 14, 30, 60].map(d => (
-                                                <button
-                                                    key={d}
-                                                    onClick={() => setLookbackDays(d)}
-                                                    className={`py-2 px-1 rounded-lg text-xs font-bold transition-all border ${lookbackDays === d
-                                                        ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
-                                                        : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'
-                                                        }`}
-                                                >
-                                                    過去{d}日
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
+                                    {/* Lookback Days selector removed (Fixed to 1 year internally) */}
 
                                     <div>
                                         <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">
-                                            変動係数 (季節性など)
+                                            調整係数 (What-if分析用)
                                             <span className="ml-2 text-blue-400">x{adjustmentFactor.toFixed(2)}</span>
                                         </label>
                                         <input
@@ -221,12 +206,15 @@ export default function ForecastPage() {
                                         <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">予測対象期間</label>
                                         <select
                                             value={period}
-                                            onChange={(e) => setPeriod(e.target.value as 'current_month' | 'next_month' | 'next_quarter')}
+                                            onChange={(e) => setPeriod(e.target.value as any)}
                                             className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2.5"
                                         >
                                             <option value="current_month">今月 (残期間)</option>
                                             <option value="next_month">翌月 (1ヶ月)</option>
                                             <option value="next_quarter">来四半期 (3ヶ月)</option>
+                                            <option value="next_6_months">半年後まで</option>
+                                            <option value="next_12_months">1年後まで</option>
+                                            <option value="next_24_months">2年後まで</option>
                                         </select>
                                     </div>
 
@@ -245,7 +233,7 @@ export default function ForecastPage() {
                                 <div className="bg-gradient-to-br from-blue-900/20 to-indigo-900/20 border border-blue-500/30 rounded-2xl p-6 relative overflow-hidden">
                                     <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 blur-3xl rounded-full pointer-events-none" />
 
-                                    <h3 className="text-sm font-medium text-blue-200 mb-1">今月の着地見込 (Predicted)</h3>
+                                    <h3 className="text-sm font-medium text-blue-200 mb-1">予測合計 (Predicted)</h3>
                                     <p className="text-4xl font-bold text-white mb-4 tracking-tight">
                                         {formatCurrency(data.totalPredicted)}
                                     </p>
@@ -255,20 +243,6 @@ export default function ForecastPage() {
                                             <span>現在までの実績:</span>
                                             <span className="font-medium">{formatCurrency(data.currentTotal)}</span>
                                         </div>
-                                        <div className="flex justify-between text-slate-300">
-                                            <span>予想残コスト:</span>
-                                            <span className="font-medium text-blue-300">+{formatCurrency(data.totalPredicted - data.currentTotal)}</span>
-                                        </div>
-                                        <div className="pt-2 border-t border-blue-500/20 flex justify-between items-center mt-2">
-                                            <span className="text-slate-300">予算 ({formatCurrency(data.budget)}):</span>
-                                            <span className={`font-bold px-2 py-0.5 rounded ${data.totalPredicted > data.budget
-                                                ? 'bg-rose-500/20 text-rose-400'
-                                                : 'bg-emerald-500/20 text-emerald-400'
-                                                }`}>
-                                                {data.totalPredicted > data.budget ? '予算超過' : '予算内'}
-                                                {' '}({Math.round((data.totalPredicted / data.budget) * 100)}%)
-                                            </span>
-                                        </div>
                                     </div>
                                 </div>
                             )}
@@ -277,7 +251,7 @@ export default function ForecastPage() {
                         {/* Right: Chart */}
                         <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl flex flex-col h-[500px]">
                             <div className="flex justify-between items-center mb-6">
-                                <h2 className="text-lg font-bold text-white">日次コスト推移と予測</h2>
+                                <h2 className="text-lg font-bold text-white">期間日次コスト推移と予測</h2>
                                 {loading && <span className="text-xs text-blue-400 animate-pulse">計算中...</span>}
                             </div>
 
@@ -301,6 +275,10 @@ export default function ForecastPage() {
                                             fontSize={12}
                                             tickFormatter={(val) => {
                                                 const d = new Date(val);
+                                                // If period spans over 6 months, show year/month
+                                                if (period === 'next_12_months' || period === 'next_24_months') {
+                                                    return `${d.getFullYear()}/${d.getMonth() + 1}`;
+                                                }
                                                 return `${d.getMonth() + 1}/${d.getDate()}`;
                                             }}
                                         />
