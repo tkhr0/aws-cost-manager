@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getAnalyticsData } from './analytics-service';
+import { getAnalyticsData } from '@/lib/analytics-service';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();

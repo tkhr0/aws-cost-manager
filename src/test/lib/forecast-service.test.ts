@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { calculateDetailedForecast, ForecastOptions } from './forecast-service';
+import { calculateDetailedForecast, ForecastOptions } from '@/lib/forecast-service';
 
 // Mock Prisma
 const { mockFindMany, mockFindFirst } = vi.hoisted(() => {

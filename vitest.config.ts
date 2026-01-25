@@ -11,6 +11,6 @@ export default defineConfig({
             '@': path.resolve(__dirname, './src'),
         },
         exclude: ['node_modules', 'dist-electron', '.next', 'e2e'],
-        setupFiles: ['./src/lib/test/setup.ts'],
+        setupFiles: ['./src/test/setup.ts'],
     },
 });

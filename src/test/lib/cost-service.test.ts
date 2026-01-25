@@ -1,12 +1,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { syncAwsCosts, getAvailableMonths } from './cost-service';
+import { syncAwsCosts, getAvailableMonths } from '@/lib/cost-service';
 
 // Mock dependencies
 // Define mockGetCostAndUsage in outer scope or setup in test
 const mockGetCostAndUsage = vi.fn();
 
-vi.mock('./aws-client', () => {
+vi.mock('@/lib/aws-client', () => {
     return {
         AwsCostClient: vi.fn().mockImplementation(() => ({
             getCostAndUsage: mockGetCostAndUsage
