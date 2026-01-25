@@ -3,7 +3,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import path from 'path';
 
 import fs from 'fs';
-import { seed } from '../src/lib/test/seed-e2e';
+import { seed } from '../src/test/seed-e2e';
 
 test.describe('Month Selection (Real Electron)', () => {
     let electronApp: any;
@@ -55,12 +55,19 @@ test.describe('Month Selection (Real Electron)', () => {
         await window.waitForLoadState('domcontentloaded');
 
         // Wait for hydration and data loading
-        await window.waitForTimeout(2000);
+        // Instead of hardcoded timeout, wait for options to be populated
+        const dashboardSelect = window.locator('select').first();
+        await expect(dashboardSelect).toBeVisible();
+
+        // Wait until we have options available (indicating data loaded)
+        await expect(async () => {
+            const count = await dashboardSelect.locator('option').count();
+            expect(count).toBeGreaterThan(0);
+        }).toPass({ timeout: 10000 });
 
         // Dashboard
         // Check for the month selector dropdown
         // With seed data, we expect '2023-01' and '2022-12'
-        const dashboardSelect = window.locator('select').first();
         await expect(dashboardSelect).toBeVisible();
         const dashboardValue = await dashboardSelect.inputValue();
         expect(['2023-01', '2022-12']).toContain(dashboardValue);
