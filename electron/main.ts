@@ -38,10 +38,6 @@ const createWindow = () => {
     console.log('Window finished loading');
   });
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
-
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
