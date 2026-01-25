@@ -94,6 +94,11 @@ ipcMain.handle('db:getDashboardData', async (_, args) => {
   return await getDashboardData(args.accountId, args.month);
 });
 
+ipcMain.handle('db:getAvailableMonths', async (_, { accountId }) => {
+  const { getAvailableMonths } = await import('../src/lib/cost-service');
+  return await getAvailableMonths(accountId);
+});
+
 ipcMain.handle('db:getAnalyticsData', async (_, args) => {
   const { getAnalyticsData } = await import('../src/lib/analytics-service');
   return await getAnalyticsData(args.accountId, args.year, args.month, args.granularity);

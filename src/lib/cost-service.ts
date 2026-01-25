@@ -87,3 +87,24 @@ export async function updateAccountSettings(id: string, budget: number, exchange
         data: { budget, exchangeRate, profileName },
     });
 }
+
+export async function getAvailableMonths(accountId?: string) {
+    const where = accountId && accountId !== 'all' ? { accountId } : {};
+
+    const records = await prisma.costRecord.findMany({
+        where,
+        select: { date: true },
+        distinct: ['date'],
+        orderBy: { date: 'desc' },
+    });
+
+    const months = new Set<string>();
+    records.forEach(r => {
+        const d = new Date(r.date);
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, '0');
+        months.add(`${yyyy}-${mm}`);
+    });
+
+    return Array.from(months).sort().reverse();
+}

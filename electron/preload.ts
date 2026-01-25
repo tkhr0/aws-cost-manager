@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('electron', {
     addAccount: (args: any) => ipcRenderer.invoke('db:addAccount', args),
     exportCsv: (args: any) => ipcRenderer.invoke('aws:exportCsv', args),
     getDashboardData: (args: any) => ipcRenderer.invoke('db:getDashboardData', args),
+    getAvailableMonths: (args: any) => ipcRenderer.invoke('db:getAvailableMonths', args),
     getAnalyticsData: (args: any) => ipcRenderer.invoke('db:getAnalyticsData', args),
     calculateDetailedForecast: (args: any) => ipcRenderer.invoke('db:calculateDetailedForecast', args),
     generateDummyData: () => ipcRenderer.invoke('db:generateDummy'),

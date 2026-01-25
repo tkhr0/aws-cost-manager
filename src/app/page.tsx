@@ -28,8 +28,8 @@ export default function Home() {
   const [chartData, setChartData] = useState<{ name: string; amount: number }[]>([]);
 
   // Filters
-  const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
+  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
 
   useEffect(() => {
@@ -43,21 +43,50 @@ export default function Home() {
         const accs = await window.electron.getAccounts();
         setAccounts(accs);
 
-        // Load dashboard data with filters
-        const data = await window.electron.getDashboardData({
-          accountId: selectedAccount,
-          month: selectedMonth
-        }) as DashboardData;
-        console.log('[Dashboard] Received data:', data);
-        setDashboardData(data);
+        // Load available months
+        const months = await window.electron.getAvailableMonths({ accountId: selectedAccount });
+        let targetMonth = selectedMonth;
 
-        // Transform records to chart data
-        if (data.records && data.records.length > 0) {
-          const chartPoints = data.records.map((r) => ({
-            name: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-            amount: r.amount,
-          }));
-          setChartData(chartPoints);
+        if (months && months.length > 0) {
+          setAvailableMonths(months);
+          // If selected month is not available (or empty), select the latest
+          if (!months.includes(selectedMonth)) {
+            targetMonth = months[0];
+            setSelectedMonth(targetMonth);
+          }
+        } else {
+          // Fallback
+          const fallbackMonths = Array.from({ length: 12 }).map((_, i) => {
+            const d = new Date();
+            d.setMonth(d.getMonth() - i);
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+          });
+          setAvailableMonths(fallbackMonths);
+          if (!selectedMonth) {
+            targetMonth = fallbackMonths[0];
+            setSelectedMonth(targetMonth);
+          }
+        }
+
+        if (targetMonth) {
+          // Load dashboard data with filters
+          const data = await window.electron.getDashboardData({
+            accountId: selectedAccount,
+            month: targetMonth
+          }) as DashboardData;
+          console.log('[Dashboard] Received data:', data);
+          setDashboardData(data);
+
+          // Transform records to chart data
+          if (data.records && data.records.length > 0) {
+            const chartPoints = data.records.map((r) => ({
+              name: new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              amount: r.amount,
+            }));
+            setChartData(chartPoints);
+          } else {
+            setChartData([]);
+          }
         }
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
@@ -156,16 +185,11 @@ export default function Home() {
               value={selectedMonth}
               onChange={(e) => setSelectedMonth(e.target.value)}
             >
-              {Array.from({ length: 12 }).map((_, i) => {
-                const d = new Date();
-                d.setMonth(d.getMonth() - i);
-                const val = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-                return (
-                  <option key={val} value={val}>
-                    {d.getFullYear()}年{d.getMonth() + 1}月
-                  </option>
-                );
-              })}
+              {availableMonths.map((val) => (
+                <option key={val} value={val}>
+                  {val.split('-')[0]}年{Number(val.split('-')[1])}月
+                </option>
+              ))}
             </select>
 
             {/* Account Selector */}

@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { syncAwsCosts } from './cost-service';
+import { syncAwsCosts, getAvailableMonths } from './cost-service';
 
 // Mock dependencies
 // Define mockGetCostAndUsage in outer scope or setup in test
@@ -21,6 +21,7 @@ vi.mock('@prisma/client', () => {
         },
         costRecord: {
             upsert: vi.fn(),
+            findMany: vi.fn(), // Added for getAvailableMonths tests
         },
     };
     return { PrismaClient: vi.fn(() => mPrisma) };
@@ -101,6 +102,47 @@ describe('syncAwsCosts', () => {
                 recordType: 'AmortizedCost', // Should use this type
                 service: 'AmazonEC2',
             }),
+        }));
+    });
+});
+
+describe('getAvailableMonths', () => {
+    let db: any;
+
+    beforeEach(async () => {
+        vi.clearAllMocks();
+        const { PrismaClient } = await import('@prisma/client');
+        db = new PrismaClient();
+    });
+
+    it('should return empty array when no data exists', async () => {
+        db.costRecord.findMany.mockResolvedValue([]);
+        const months = await getAvailableMonths();
+        expect(months).toEqual([]);
+    });
+
+    it('should return available months in descending order', async () => {
+        // Mock data
+        db.costRecord.findMany.mockResolvedValue([
+            { date: new Date('2023-01-15') },
+            { date: new Date('2023-02-20') },
+            { date: new Date('2023-01-01') },
+        ]);
+
+        // Logic test: The service should process these into unique YYYY-MM strings
+        const months = await getAvailableMonths();
+        expect(months).toEqual(['2023-02', '2023-01']);
+    });
+
+    it('should filter by accountId', async () => {
+        db.costRecord.findMany.mockResolvedValue([
+            { date: new Date('2023-03-01') },
+        ]);
+
+        await getAvailableMonths('acc-123');
+
+        expect(db.costRecord.findMany).toHaveBeenCalledWith(expect.objectContaining({
+            where: { accountId: 'acc-123' }
         }));
     });
 });
