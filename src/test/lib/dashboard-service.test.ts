@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { getDashboardData } from './dashboard-service';
+import { getDashboardData } from '@/lib/dashboard-service';
 
 // Mock Prisma
 const { mockFindMany, mockFindFirst, mockAccountFindUnique, mockAccountFindMany } = vi.hoisted(() => {
