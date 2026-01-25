@@ -87,11 +87,13 @@ describe('calculateDetailedForecast', () => {
 
         // Check daily amount in forecast
         // Since input was monthly sum 300, daily avg is ~10.
-        const firstPoint = result.forecast[0];
-        expect(firstPoint.amount).toBeCloseTo(300 / 30, 0); // Approx 10
+        // [Updated Logic] We apply 1.1x markup for Support Cost estimation.
+        // Expected: 10 * 1.1 = 11
+        const firstPoint = result.forecast[0].amount;
+        expect(firstPoint).toBeCloseTo((300 / 30) * 1.1, 0); // Approx 11
     });
 
-    it('should forecast increasing trend', async () => {
+    it('should forecast increasing trend (with markup)', async () => {
         const options: ForecastOptions = {
             adjustmentFactor: 1.0,
             additionalFixedCost: 0,
@@ -142,5 +144,83 @@ describe('calculateDetailedForecast', () => {
 
         // Should not throw
         await expect(calculateDetailedForecast('all', options)).resolves.not.toThrow();
+    });
+
+    it('should exclude Tax/Support from regression and add 10% markup to forecast', async () => {
+        // Mock data:
+        // Service Normal: $1000/month constant
+        // Service Tax: $500/month (Should be ignored)
+        // Service Support: $300/month (Should be ignored)
+
+        // Total Input per month = 1800
+        // Expected Logic:
+        // Regression Base = 1000 (Normal only)
+        // Forecast (Next Month) Base = 1000
+        // Markup 10% -> 1100
+        // Result Forecast sum should match daily distribution of 1100.
+
+        const options: ForecastOptions = {
+            adjustmentFactor: 1.0,
+            additionalFixedCost: 0,
+            period: 'next_month',
+        };
+
+        const mockRecords = [];
+        const now = new Date();
+        // 3 months of data to trigger regression (or flat)
+        for (let i = 0; i < 3; i++) {
+            const m = new Date(now.getFullYear(), now.getMonth() - 3 + i, 15);
+            mockRecords.push({ date: m, amount: 1000, service: 'Normal Service' });
+            mockRecords.push({ date: m, amount: 500, service: 'Tax' });
+            mockRecords.push({ date: m, amount: 300, service: 'AWS Support' });
+        }
+
+        mockFindMany
+            .mockResolvedValueOnce(mockRecords) // Regression Source
+            .mockResolvedValueOnce([]) // Chart History
+            .mockResolvedValueOnce([]); // MTD
+
+        const result = await calculateDetailedForecast('all', options);
+
+        // Analyze forecast sum
+        const forecastSum = result.forecast.reduce((a, b) => a + b.amount, 0);
+
+        // Expected Base: $1000 * 1.1 = $1100
+        // Approx range
+        expect(forecastSum).toBeGreaterThan(1050);
+        expect(forecastSum).toBeLessThan(1150);
+
+        // Ensure it is NOT 1800+ (which would mean exclusion failed)
+        expect(forecastSum).toBeLessThan(1500);
+
+        // Verify Chart History Exclusion
+        // Step 5 of the service queries for chart history. 
+        // We mocked the second mockFindMany call to return empty array above, 
+        // so we can't strictly verify it here without changing mocks.
+    });
+
+    it('should exclude Tax/Support from chart history results', async () => {
+        const options: ForecastOptions = {
+            adjustmentFactor: 1.0,
+            additionalFixedCost: 0,
+            period: 'next_month',
+        };
+
+        const mockHistRecords = [
+            { date: new Date(), amount: 100, service: 'Normal' },
+            { date: new Date(), amount: 50, service: 'Tax' },
+            { date: new Date(), amount: 30, service: 'AWS Support' }
+        ];
+
+        mockFindMany
+            .mockResolvedValueOnce([]) // Regression
+            .mockResolvedValueOnce(mockHistRecords) // Chart History
+            .mockResolvedValueOnce([]); // MTD
+
+        const result = await calculateDetailedForecast('all', options);
+
+        // Chart history should only contain Normal (100)
+        const histSum = result.history.reduce((a, b) => a + b.amount, 0);
+        expect(histSum).toBe(100);
     });
 });
