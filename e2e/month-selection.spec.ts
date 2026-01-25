@@ -2,34 +2,50 @@
 import { test, expect, _electron as electron } from '@playwright/test';
 import path from 'path';
 
-import { execSync } from 'child_process';
+import fs from 'fs';
+import { seed } from '../src/lib/test/seed-e2e';
 
 test.describe('Month Selection (Real Electron)', () => {
     let electronApp: any;
     let window: any;
+    let dbPath: string;
 
     test.beforeAll(async () => {
-        // Seed database
-        console.log('Running seed script...');
-        const seedPath = path.join(__dirname, '../src/lib/test/seed-e2e.ts');
-        execSync(`npx tsx ${seedPath}`, { stdio: 'inherit' });
+        // Unique DB setup happens in the test
     });
 
     test.afterAll(async () => {
         if (electronApp) {
             await electronApp.close();
         }
+        // Cleanup temp db
+        if (dbPath && fs.existsSync(dbPath)) {
+            try {
+                fs.unlinkSync(dbPath);
+                fs.unlinkSync(`${dbPath}-journal`); // SQLite journal if any
+            } catch {
+                // Ignore cleanup errors
+            }
+        }
     });
 
     test('should launch and display month selector', async () => {
         // Launch Electron app
-        const dbPath = path.resolve(__dirname, '../test.db');
+        // Use a unique DB to avoid locking
+        const uniqueId = Math.random().toString(36).substring(7);
+        dbPath = path.resolve(__dirname, `../test-${uniqueId}.db`);
+        const dbUrl = `file:${dbPath}`;
+
+        console.log(`Using unique DB: ${dbPath}`);
+
+        // Seed database using the unique path
+        await seed(dbUrl);
 
         electronApp = await electron.launch({
-            args: [path.join(__dirname, '../dist-electron/electron/main.js')],
+            args: ['--no-sandbox', path.join(__dirname, '../dist-electron/electron/main.js')],
             env: {
                 ...process.env,
-                DATABASE_URL: `file:${dbPath}`,
+                DATABASE_URL: dbUrl,
                 NODE_ENV: 'test'
             }
         });
@@ -39,7 +55,7 @@ test.describe('Month Selection (Real Electron)', () => {
         await window.waitForLoadState('domcontentloaded');
 
         // Wait for hydration and data loading
-        await window.waitForTimeout(1000);
+        await window.waitForTimeout(2000);
 
         // Dashboard
         // Check for the month selector dropdown

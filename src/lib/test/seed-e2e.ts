@@ -3,31 +3,37 @@ import path from 'path';
 import { PrismaClient } from '@prisma/client';
 
 // Use absolute path for test.db in the project root
-const dbPath = path.resolve(__dirname, '../../../test.db');
-const dbUrl = `file:${dbPath}`;
-process.env.DATABASE_URL = dbUrl;
+// Use absolute path for test.db in the project root, or use provided env var
+// If running as script, process.env.DATABASE_URL might be set
+// If imported, we might pass it.
 
-console.log('Targeting database:', dbUrl);
-
-// Pass datasourceUrl explicitely
-const prisma = new PrismaClient({
-    datasources: {
-        db: {
-            url: dbUrl
-        }
+export async function seed(targetDbUrl?: string) {
+    let dbUrl = targetDbUrl || process.env.DATABASE_URL;
+    if (!dbUrl) {
+        const dbPath = path.resolve(__dirname, '../../../test.db');
+        dbUrl = `file:${dbPath}`;
+        process.env.DATABASE_URL = dbUrl;
     }
-});
 
-async function main() {
+    console.log('Targeting database:', dbUrl);
+
+    // Pass datasourceUrl explicitely
+    const prisma = new PrismaClient({
+        datasources: {
+            db: {
+                url: dbUrl
+            }
+        }
+    });
+
     // Ensure DB schema exists
     try {
         console.log('Pushing schema to E2E test database...');
         const { execSync } = await import('child_process');
-        // Prepend env var to command to ensure it overrides .env
         execSync(`DATABASE_URL="${dbUrl}" npx prisma db push --skip-generate --accept-data-loss`, { stdio: 'inherit' });
     } catch (e) {
         console.error('Schema push failed:', e);
-        process.exit(1);
+        throw e;
     }
 
     console.log('Seeding E2E test database...');
@@ -69,13 +75,7 @@ async function main() {
     });
 
     console.log('Seeding complete.');
+    await prisma.$disconnect();
 }
 
-main()
-    .catch((e) => {
-        console.error(e);
-        process.exit(1);
-    })
-    .finally(async () => {
-        await prisma.$disconnect();
-    });
+// Standalone execution logic removed to avoid ESM/CJS conflicts

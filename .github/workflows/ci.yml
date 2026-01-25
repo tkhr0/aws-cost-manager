@@ -62,8 +62,17 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
+      - name: Build Next.js
+        run: npm run build:next
+
+      - name: Build Electron
+        run: npm run build:electron
+
+      - run: ls -la
+      - run: ls -la dist-electron/electron/
+
       - name: Run E2E Tests
-        run: npm run test:e2e
+        run: xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" -- npm run test:e2e
 
   build-check:
     runs-on: ubuntu-latest

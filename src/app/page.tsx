@@ -28,7 +28,8 @@ export default function Home() {
   const [chartData, setChartData] = useState<{ name: string; amount: number }[]>([]);
 
   // Filters
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const currentMonthStr = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [availableMonths, setAvailableMonths] = useState<string[]>([]);
   const [selectedAccount, setSelectedAccount] = useState<string>('all');
 
