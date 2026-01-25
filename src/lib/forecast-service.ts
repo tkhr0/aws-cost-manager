@@ -67,10 +67,6 @@ export async function calculateDetailedForecast(
             targetEnd = new Date(currentYear, currentMonth + 2, 0); // End of next month
             break;
         case 'next_quarter':
-            // Current month + next 3 months? Or align to quarters?
-            // "Next Quarter" usually means next 3 months logic in this app context often.
-            // Let's interpret as "Next 3 months" roughly or align to quarters.
-            // Documentation says "next_quarter" (3 months). Let's do 3 full months ahead.
             targetEnd = new Date(currentYear, currentMonth + 4, 0);
             break;
         case 'next_6_months':
@@ -115,121 +111,132 @@ export async function calculateDetailedForecast(
         orderBy: { date: 'asc' },
     });
 
-    // 3. Process History for Regression Grouped by Service
-    // Group by Service -> Month -> Sum -> Daily Average
-    type ServiceHistory = {
-        [service: string]: {
-            [monthKey: string]: { sum: number; days: number } // monthKey: YYYY-MM
-        }
-    };
+    // 3. Process Data: Group by Service & Monthly
+    // Helper to get YYYY-MM key
+    const getMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
-    const serviceHistory: ServiceHistory = {};
-
-    // Helper to get days in month
-    const getDaysInMonth = (y: number, m: number) => new Date(y, m + 1, 0).getDate();
+    // Group records by Service -> Month
+    const serviceMonthlyMap = new Map<string, Map<string, number>>();
+    // Also track days in each month for average calc
+    const daysInMonthMap = new Map<string, number>();
 
     records.forEach(r => {
-        if (r.service === 'Total') return; // Skip Total records if any (we aggregate manually)
-
-        const d = new Date(r.date);
-        const mKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-
-        if (!serviceHistory[r.service]) serviceHistory[r.service] = {};
-        if (!serviceHistory[r.service][mKey]) {
-            serviceHistory[r.service][mKey] = { sum: 0, days: getDaysInMonth(d.getFullYear(), d.getMonth()) };
+        // [New Requirement] Exclude Tax and Support from Regression Source
+        // Use case-insensitive check appropriately or specific strings? 
+        // User said "Tax" and "Support". Assuming simple include.
+        if (r.service.includes('Tax') || r.service.includes('Support')) {
+            return;
         }
-        serviceHistory[r.service][mKey].sum += r.amount;
+
+        const mKey = getMonthKey(r.date);
+        if (!serviceMonthlyMap.has(r.service)) {
+            serviceMonthlyMap.set(r.service, new Map());
+        }
+        const sMap = serviceMonthlyMap.get(r.service)!;
+        sMap.set(mKey, (sMap.get(mKey) || 0) + r.amount);
+
+        if (!daysInMonthMap.has(mKey)) {
+            const d = new Date(r.date);
+            const dim = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+            daysInMonthMap.set(mKey, dim);
+        }
     });
 
-    // Calculate Regression per Service
-    // X = Month Index (relative to start), Y = Daily Average Amount
-    interface ServiceTrend {
-        slope: number;
-        intercept: number;
-        lastValue: number; // Fallback
-        dataPoints: number;
+    // 4. Per Service Regression & Forecast
+    // Result Accumulator (Daily)
+    // Map<DateString, number>
+    const dailyForecastMap = new Map<string, number>();
+
+    // Target Dates Array
+    const forecastDates: Date[] = [];
+    let d = new Date(todayStart); // Start from today
+    while (d <= targetEnd) {
+        forecastDates.push(new Date(d));
+        d.setDate(d.getDate() + 1);
     }
-    const serviceTrends: Map<string, ServiceTrend> = new Map();
 
-    Object.entries(serviceHistory).forEach(([service, monthData]) => {
-        const sortedMonths = Object.keys(monthData).sort();
-        // Skip regression if too few data points (e.g. < 3 months)
-        const dataPoints: { x: number; y: number }[] = [];
-        let lastVal = 0;
+    // Iterate Services
+    for (const [serviceName, monthlyData] of serviceMonthlyMap.entries()) {
+        // Convert map to array for regression
+        // We need X (index 0..11) and Y (Daily Average Amount)
+        // Sort months
+        const sortedMonths = Array.from(monthlyData.keys()).sort();
 
-        sortedMonths.forEach((mKey, index) => {
-            const { sum, days } = monthData[mKey];
-            const avgDaily = sum / days;
-            dataPoints.push({ x: index, y: avgDaily });
-            lastVal = avgDaily;
+        // Skip if not enough data points (e.g. < 3 months) ?
+        // Strategy: If < 3 months, use Last Value (Average of last existing month)
+        // If >= 3 months, use Linear Regression.
+
+        const regressionData = sortedMonths.map((mKey, idx) => {
+            const total = monthlyData.get(mKey)!;
+            const days = daysInMonthMap.get(mKey) || 30; // fallback
+            const dailyAvg = total / days;
+            return { x: idx, y: dailyAvg };
         });
 
-        if (sortedMonths.length >= 3) {
-            const { slope, intercept } = calculateLinearRegression(dataPoints);
-            serviceTrends.set(service, { slope, intercept, lastValue: lastVal, dataPoints: sortedMonths.length });
+        let slope = 0;
+        let intercept = 0;
+        let useRegression = false;
+
+        // Basic "Last Value" fallback
+        let lastValue = 0;
+        if (regressionData.length > 0) {
+            lastValue = regressionData[regressionData.length - 1].y;
+        }
+
+        if (regressionData.length >= 3) {
+            useRegression = true;
+            const res = calculateLinearRegression(regressionData);
+            slope = res.slope;
+            intercept = res.intercept;
         } else {
-            // Fallback: Flat trend based on last value
-            serviceTrends.set(service, { slope: 0, intercept: lastVal, lastValue: lastVal, dataPoints: sortedMonths.length });
+            // Fallback: Flat line from last known value
+            slope = 0;
+            intercept = lastValue;
         }
-    });
 
-    // 4. Generate Forecast
-    // Determine start date for forecast (Today)
-    const forecastStart = new Date(todayStart);
-    const forecastMap = new Map<string, number>(); // date -> amount
+        // Forecast for each target day
+        // We need to map target day to "X index".
 
-    // We iterate MONTHLY to calculate predicted daily average, then fill daily
-    // Current Month remaining days check
+        if (sortedMonths.length === 0) continue;
 
-    let iterDate = new Date(forecastStart);
-    // Align regression X axis:
-    // The regression inputs were 0..11 (if 1 year data).
-    // Current month is index 12?
-    // We need to map current time to the regression X-axis.
-    // "lookbackStart" was the 0-point for regression?
-    // Yes: lookbackStart month is index 0.
+        const firstMonthStr = sortedMonths[0]; // YYYY-MM
+        const firstMonthDate = new Date(`${firstMonthStr}-01`);
 
-    const getRegressionX = (d: Date) => {
-        return (d.getFullYear() - lookbackStart.getFullYear()) * 12 + (d.getMonth() - lookbackStart.getMonth());
-    };
+        forecastDates.forEach(targetDate => {
+            // Calculate month difference
+            // diff = (targetYear - firstYear) * 12 + (targetMonth - firstMonth)
+            // This is the "Month Index".
+            const diffMonths = (targetDate.getFullYear() - firstMonthDate.getFullYear()) * 12 +
+                (targetDate.getMonth() - firstMonthDate.getMonth());
 
-    while (iterDate <= targetEnd) {
-        const mKey = iterDate.toISOString().split('T')[0];
-        const monthX = getRegressionX(iterDate);
+            // The regression was built on monthly averages.
+            // We can use that average for the whole month?
+            // Or interpolate?
+            // Simple approach: Use the monthly average prediction for that month.
 
-        let dailyTotal = 0;
-
-        // Sum predictions for all services
-        for (const trend of serviceTrends.values()) {
             let predictedDaily = 0;
-            if (trend.slope === 0 && trend.dataPoints < 3) {
-                predictedDaily = trend.lastValue;
+            if (useRegression) {
+                predictedDaily = slope * diffMonths + intercept;
             } else {
-                predictedDaily = trend.slope * monthX + trend.intercept;
+                predictedDaily = intercept; // Last value constant
             }
-            // Floor at 0
+
+            // Clamp to 0
             predictedDaily = Math.max(0, predictedDaily);
-            dailyTotal += predictedDaily;
-        }
 
-        // Apply Adjustment Factor
-        dailyTotal *= options.adjustmentFactor;
-
-        // Add additional fixed cost (Daily portion? Or Monthly fixed cost allocated daily?)
-        // Spec says "Additional Fixed Cost (USD)". If it's a monthly inputs usually...
-        // But the previous code treated it as a flat addition to the TOTAL predicted.
-        // Let's check previous impl: `totalPredicted = currentTotal + forecastTotal + options.additionalFixedCost;`
-        // It was added once to the grand total. So we don't add it to daily points here.
-
-        forecastMap.set(mKey, dailyTotal);
-        iterDate.setDate(iterDate.getDate() + 1);
+            // Setup map key
+            const key = targetDate.toISOString().split('T')[0];
+            const current = dailyForecastMap.get(key) || 0;
+            dailyForecastMap.set(key, current + predictedDaily);
+        });
     }
 
-    const forecast = Array.from(forecastMap.entries())
-        .map(([date, amount]) => ({ date, amount, isForecast: true }))
-        .sort((a, b) => a.date.localeCompare(b.date));
+    // [New Requirement] Multiply forecast by 1.10 (Support Cost Markup)
+    // Apply this to the final daily totals.
+    const SUPPORT_MARKUP = 1.10;
 
-    // 5. Build History Data for Chart (last 30 days actuals for context)
+    // 5. Build History (Chart)
+    // Simplify: just aggregate daily totals from fetched records (Chart shows actuals)
     // Re-query for granular daily history to show on chart
     const chartHistoryStart = new Date();
     chartHistoryStart.setDate(chartHistoryStart.getDate() - 60); // Show last 60 days
@@ -244,12 +251,14 @@ export async function calculateDetailedForecast(
         orderBy: { date: 'asc' }
     });
 
-    // Group history daily
     const historyMap = new Map<string, number>();
     historyRecords.forEach(r => {
+        // [New Requirement] Exclude Tax and Support from Chart History (Actuals)
+        if (r.service.includes('Tax') || r.service.includes('Support')) return;
+
         if (r.service === 'Total' && historyRecords.some(hr => hr.service !== 'Total')) return;
-        const dKey = r.date.toISOString().split('T')[0];
-        historyMap.set(dKey, (historyMap.get(dKey) || 0) + r.amount);
+        const key = r.date.toISOString().split('T')[0];
+        historyMap.set(key, (historyMap.get(key) || 0) + r.amount);
     });
 
     const history = Array.from(historyMap.entries())
@@ -257,55 +266,26 @@ export async function calculateDetailedForecast(
         .sort((a, b) => a.date.localeCompare(b.date));
 
 
-    // 6. Calculate Totals
-    // We need "currentTotal" (for this month?) and "totalPredicted" (for target period?)
-    // This part is ambiguous in 'forecast-service.ts' originally.
-    // "currentTotal" seemed to be used for "Achievement so far this month".
-    // "totalPredicted" was "currentTotal + forecast remaining".
-    // But if we selected "Next 12 months", what should "Total Predicted" be?
-    // Probably the total sum of the forecast period + current partial if included.
+    // 6. Build Forecast Array
+    const forecast = Array.from(dailyForecastMap.entries())
+        .map(([date, amount]) => {
+            // Apply Factors
+            let finalAmount = amount * options.adjustmentFactor;
+            finalAmount += (options.additionalFixedCost / 30); // Very rough daily distribution of fixed cost
 
-    // Let's strictly follow the definition:
-    // If period is 'current_month': currentTotal (actuals this month) + forecast (remaining days).
-    // If period is 'next_12_months': It's usually the sum of the forecast.
+            // Apply Support Markup
+            finalAmount = finalAmount * SUPPORT_MARKUP;
 
-    // However, the UI shows "Total Predicted" and "Budget". Budget matches a specific month usually.
-    // If we select "2 years", Budget comparison against "One Month Budget" makes no sense.
-    // The UI might need adjustment, but here we just return the values.
+            return { date, amount: finalAmount, isForecast: true };
+        })
+        .sort((a, b) => a.date.localeCompare(b.date));
 
-    // Let's define:
-    // currentTotal: Sum of ACTUALs within the Start-End range of the forecast context?
-    // OR just "Month to date" for the current month?
-    // Previous code:
-    // `currentTotal = history.reduce...` where history was "Target Period Actuals".
-    // So if target was "Next Month", history actuals was 0.
 
-    // We should probably calculate actuals for the *Current Month* always for reference,
-    // AND actuals for the *Target Period* if any overlap.
-
+    // 7. Calculate Totals
+    // Let's re-calculate "Actuals in Target Period".
     // For simplicity and backward compatibility with the 'Current Month' view:
     // If Target Period starts in future, currentTotal (for that target) is 0.
     // If Target Period includes today, we sum actuals.
-
-    // Let's re-calculate "Actuals in Target Period".
-    const targetActualsClause: Prisma.CostRecordWhereInput = {
-        date: {
-            gte: forecastStart, // Wait, forecastStart is today.
-            // We need start of the reporting period.
-            // For "Current Month", it is Month 1st.
-        }
-    };
-
-    // Logic refinement:
-    // We need a clear start date for the "Prediction Total".
-    // Usage: "Current Month Forecast" -> Start 1st, End 30th.
-    // "Next 12 Months" -> Start Today? Or Start Next Month 1st?
-    // User option says "Next 1 year".
-    // Usually means "From now + 1 year" OR "Next Jan to Next Dec"?
-    // "Next 12 months" usually means "Coming 12 months".
-    // Let's assume prediction summations starts from TODAY until TargetEnd.
-
-    // BUT for "Current Month" mode, we add "Month-to-date Actuals".
 
     // Let's fetch "Month to Date" actuals separate from chart history.
     const startOfMonth = new Date(currentYear, currentMonth, 1);
@@ -322,11 +302,6 @@ export async function calculateDetailedForecast(
 
     const forecastSum = forecast.reduce((sum, f) => sum + f.amount, 0);
 
-    // Total Predicted:
-    // If period is 'current_month', it is MonthActual + ForecastRemaining.
-    // If period is future, it is just ForecastSum.
-    // Wait, the UI displays "currentTotal" too.
-
     let totalPredicted = forecastSum;
     let displayCurrentTotal = 0;
 
@@ -334,11 +309,8 @@ export async function calculateDetailedForecast(
         totalPredicted += currentMonthActual;
         displayCurrentTotal = currentMonthActual;
     } else {
-        // For future periods, we might not show "Current Total" or it applies to the start of that period (0).
         displayCurrentTotal = 0;
     }
-
-    totalPredicted += options.additionalFixedCost;
 
     // Budget: fetch for current month as a baseline reference
     const monthKey = `${startOfMonth.getFullYear()}-${String(startOfMonth.getMonth() + 1).padStart(2, '0')}`;
@@ -352,8 +324,11 @@ export async function calculateDetailedForecast(
     return {
         history,
         forecast,
-        currentTotal: displayCurrentTotal,
-        totalPredicted,
+        currentTotal: displayCurrentTotal, // MTD or 0
+        totalPredicted, // Forecast Sum (Marked up) + MTD (if current) + Fixed Cost (Allocated) is handled inside forecast array?
+        // Wait, additionalFixedCost was added to daily forecast points in step 6.
+        // So forecastSum includes it.
+        // If current_month, we add MTD actuals.
         budget: budgetRec?.amount || 0
     };
 }
