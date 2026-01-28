@@ -23,12 +23,21 @@ interface ForecastPoint {
     amount: number;
 }
 
+interface ServiceTrend {
+    serviceName: string;
+    slope: number;
+    currentDailyAvg: number;
+    lastMonthAmount: number;
+    forecastTotal: number;
+}
+
 interface ForecastData {
     history: ForecastPoint[];
     forecast: ForecastPoint[];
     totalPredicted: number;
     currentTotal: number;
     budget: number;
+    serviceBreakdown: ServiceTrend[];
 }
 
 export default function ForecastPage() {
@@ -250,6 +259,7 @@ export default function ForecastPage() {
 
                         {/* Right: Chart */}
                         <div className="lg:col-span-2 bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl flex flex-col h-[500px]">
+                            {/* ... Chart Content (Keep as is, just referencing context) ... */}
                             <div className="flex justify-between items-center mb-6">
                                 <h2 className="text-lg font-bold text-white">期間日次コスト推移と予測</h2>
                                 {loading && <span className="text-xs text-blue-400 animate-pulse">計算中...</span>}
@@ -323,6 +333,54 @@ export default function ForecastPage() {
                                 </ResponsiveContainer>
                             </div>
                         </div>
+
+                        {/* Service Breakdown Table */}
+                        {data?.serviceBreakdown && (
+                            <div className="lg:col-span-3 bg-slate-900/40 border border-slate-800 rounded-3xl p-6 backdrop-blur-xl shadow-xl">
+                                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                                    <Table size={20} className="text-blue-400" />
+                                    サービス別予測詳細
+                                </h3>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-left text-sm text-slate-300">
+                                        <thead className="bg-slate-800/50 text-slate-400 uppercase text-xs">
+                                            <tr>
+                                                <th className="px-4 py-3 rounded-l-lg">Service</th>
+                                                <th className="px-4 py-3">Trend Slope (Daily)</th>
+                                                <th className="px-4 py-3">Avg / Day (Last Month)</th>
+                                                <th className="px-4 py-3">Last Month Actual</th>
+                                                <th className="px-4 py-3 rounded-r-lg">Forecast Total</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-800/50">
+                                            {data.serviceBreakdown.map((item, idx) => (
+                                                <tr key={idx} className="hover:bg-slate-800/30 transition-colors">
+                                                    <td className="px-4 py-3 font-medium text-white">{item.serviceName}</td>
+                                                    <td className="px-4 py-3">
+                                                        <div className="flex items-center gap-1">
+                                                            {item.slope > 0.01 ? (
+                                                                <TrendingUp size={14} className="text-red-400" />
+                                                            ) : item.slope < -0.01 ? (
+                                                                <TrendingUp size={14} className="text-emerald-400 transform rotate-180" />
+                                                            ) : (
+                                                                <span className="text-slate-500">-</span>
+                                                            )}
+                                                            <span className={item.slope > 0.01 ? "text-red-400" : item.slope < -0.01 ? "text-emerald-400" : "text-slate-400"}>
+                                                                {item.slope > 0 ? '+' : ''}{item.slope.toFixed(2)}
+                                                            </span>
+                                                            <span className="text-xs text-slate-500"> / day</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 tabular-nums">{formatCurrency(item.currentDailyAvg)}</td>
+                                                    <td className="px-4 py-3 tabular-nums">{formatCurrency(item.lastMonthAmount)}</td>
+                                                    <td className="px-4 py-3 tabular-nums text-white font-bold">{formatCurrency(item.forecastTotal)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 </main>
             </div>
