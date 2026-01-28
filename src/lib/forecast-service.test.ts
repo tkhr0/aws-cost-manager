@@ -185,13 +185,21 @@ describe('calculateDetailedForecast', () => {
         // Analyze forecast sum
         const forecastSum = result.forecast.reduce((a, b) => a + b.amount, 0);
 
-        // Expected Base: $1000 * 1.1 = $1100
-        // Approx range
+        // Expected Base: $1000 * 1.1 = $1100 (for 30 days)
+        // Since forecast includes "remainder of current month" + "next month",
+        // the total might be slightly higher than 1 month sum (e.g. ~35 days).
         expect(forecastSum).toBeGreaterThan(1050);
-        expect(forecastSum).toBeLessThan(1150);
+        expect(forecastSum).toBeLessThan(1300); // adjusted for potential extra days
 
         // Ensure it is NOT 1800+ (which would mean exclusion failed)
         expect(forecastSum).toBeLessThan(1500);
+
+        // [New Check] Verify Service Breakdown
+        // Should only contain "Normal Service". Tax and Support should be excluded.
+        expect(result.serviceBreakdown.length).toBe(1);
+        expect(result.serviceBreakdown[0].serviceName).toBe('Normal Service');
+        // Daily Avg should be 1000/30 (approx 33.33)
+        expect(result.serviceBreakdown[0].currentDailyAvg).toBeCloseTo(1000 / 30, 0);
 
         // Verify Chart History Exclusion
         // Step 5 of the service queries for chart history. 

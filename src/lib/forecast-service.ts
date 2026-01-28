@@ -10,12 +10,21 @@ export interface ForecastOptions {
     period?: 'current_month' | 'next_month' | 'next_quarter' | 'next_6_months' | 'next_12_months' | 'next_24_months';
 }
 
+export interface ServiceTrend {
+    serviceName: string;
+    slope: number;
+    currentDailyAvg: number;
+    lastMonthAmount: number;
+    forecastTotal: number;
+}
+
 export interface ForecastResult {
     history: { date: string; amount: number; isForecast: boolean }[];
     forecast: { date: string; amount: number; isForecast: boolean }[];
     totalPredicted: number;
     currentTotal: number;
     budget: number;
+    serviceBreakdown: ServiceTrend[];
 }
 
 interface LinearRegressionResult {
@@ -54,11 +63,6 @@ export async function calculateDetailedForecast(
 
     // 1. Determine Target End Date based on period
     let targetEnd: Date;
-    // Target Start is usually "Tomorrow" regarding forecast context, but for "current month" it's end of this month.
-    // Actually we want to project from "Now" until "Target End".
-
-    // For "Current Month": Forecast until end of this month.
-    // For others: Forecast until end of that period.
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
 
@@ -84,11 +88,11 @@ export async function calculateDetailedForecast(
             break;
     }
 
-    // 2. Fetch History (Last 12 months for regression)
-    const lookbackStart = new Date(currentYear - 1, currentMonth, 1); // 1 year ago 1st
+    // 2. Fetch History (Last 6 months for regression)
+    // [Updated Requirement] Change from 1 year to 6 months
+    const lookbackStart = new Date(currentYear, currentMonth - 6, 1);
     const todayStart = new Date(currentYear, currentMonth, now.getDate());
 
-    // Validate Dates to prevent obscure Prisma errors
     if (isNaN(lookbackStart.getTime())) {
         throw new Error(`Invalid lookbackStart date derived from currentYear=${currentYear}, currentMonth=${currentMonth}`);
     }
@@ -99,7 +103,7 @@ export async function calculateDetailedForecast(
     const whereClause: Prisma.CostRecordWhereInput = {
         date: {
             gte: lookbackStart,
-            lt: todayStart, // Exclude today to avoid partial data messing up average? Or include? usually exclude today for completeness
+            lt: todayStart,
         },
     };
     if (accountId && accountId !== 'all') {
@@ -112,7 +116,6 @@ export async function calculateDetailedForecast(
     });
 
     // 3. Process Data: Group by Service & Monthly
-    // Helper to get YYYY-MM key
     const getMonthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
     // Group records by Service -> Month
@@ -122,7 +125,6 @@ export async function calculateDetailedForecast(
 
     records.forEach(r => {
         // [New Requirement] Exclude Tax and Support from Regression Source
-        // Use case-insensitive check appropriately or specific strings? 
         // User said "Tax" and "Support". Assuming simple include.
         if (r.service.includes('Tax') || r.service.includes('Support')) {
             return;
@@ -144,7 +146,6 @@ export async function calculateDetailedForecast(
 
     // 4. Per Service Regression & Forecast
     // Result Accumulator (Daily)
-    // Map<DateString, number>
     const dailyForecastMap = new Map<string, number>();
 
     // Target Dates Array
@@ -155,16 +156,11 @@ export async function calculateDetailedForecast(
         d.setDate(d.getDate() + 1);
     }
 
+    const serviceBreakdown: ServiceTrend[] = [];
+
     // Iterate Services
     for (const [serviceName, monthlyData] of serviceMonthlyMap.entries()) {
-        // Convert map to array for regression
-        // We need X (index 0..11) and Y (Daily Average Amount)
-        // Sort months
         const sortedMonths = Array.from(monthlyData.keys()).sort();
-
-        // Skip if not enough data points (e.g. < 3 months) ?
-        // Strategy: If < 3 months, use Last Value (Average of last existing month)
-        // If >= 3 months, use Linear Regression.
 
         const regressionData = sortedMonths.map((mKey, idx) => {
             const total = monthlyData.get(mKey)!;
@@ -176,9 +172,8 @@ export async function calculateDetailedForecast(
         let slope = 0;
         let intercept = 0;
         let useRegression = false;
-
-        // Basic "Last Value" fallback
         let lastValue = 0;
+
         if (regressionData.length > 0) {
             lastValue = regressionData[regressionData.length - 1].y;
         }
@@ -194,8 +189,13 @@ export async function calculateDetailedForecast(
             intercept = lastValue;
         }
 
-        // Forecast for each target day
-        // We need to map target day to "X index".
+        // Capture Breakdown Info
+        const lastMonthKey = sortedMonths[sortedMonths.length - 1];
+        const lastMonthAmount = monthlyData.get(lastMonthKey) || 0;
+        const lastMonthDays = daysInMonthMap.get(lastMonthKey) || 30;
+        const currentDailyAvg = lastMonthAmount / lastMonthDays;
+
+        let serviceForecastSum = 0;
 
         if (sortedMonths.length === 0) continue;
 
@@ -204,15 +204,8 @@ export async function calculateDetailedForecast(
 
         forecastDates.forEach(targetDate => {
             // Calculate month difference
-            // diff = (targetYear - firstYear) * 12 + (targetMonth - firstMonth)
-            // This is the "Month Index".
             const diffMonths = (targetDate.getFullYear() - firstMonthDate.getFullYear()) * 12 +
                 (targetDate.getMonth() - firstMonthDate.getMonth());
-
-            // The regression was built on monthly averages.
-            // We can use that average for the whole month?
-            // Or interpolate?
-            // Simple approach: Use the monthly average prediction for that month.
 
             let predictedDaily = 0;
             if (useRegression) {
@@ -224,20 +217,35 @@ export async function calculateDetailedForecast(
             // Clamp to 0
             predictedDaily = Math.max(0, predictedDaily);
 
-            // Setup map key
+            // Setup global map key
             const key = targetDate.toISOString().split('T')[0];
             const current = dailyForecastMap.get(key) || 0;
             dailyForecastMap.set(key, current + predictedDaily);
+
+            serviceForecastSum += predictedDaily;
+        });
+
+        serviceBreakdown.push({
+            serviceName,
+            slope,
+            currentDailyAvg,
+            lastMonthAmount,
+            forecastTotal: serviceForecastSum
         });
     }
 
+    // Apply global factor to service breakdown forecastTotal for consistency
+    serviceBreakdown.forEach(s => {
+        s.forecastTotal *= options.adjustmentFactor;
+    });
+    // Sort
+    serviceBreakdown.sort((a, b) => b.forecastTotal - a.forecastTotal);
+
     // [New Requirement] Multiply forecast by 1.10 (Support Cost Markup)
-    // Apply this to the final daily totals.
     const SUPPORT_MARKUP = 1.10;
 
     // 5. Build History (Chart)
     // Simplify: just aggregate daily totals from fetched records (Chart shows actuals)
-    // Re-query for granular daily history to show on chart
     const chartHistoryStart = new Date();
     chartHistoryStart.setDate(chartHistoryStart.getDate() - 60); // Show last 60 days
 
@@ -253,7 +261,7 @@ export async function calculateDetailedForecast(
 
     const historyMap = new Map<string, number>();
     historyRecords.forEach(r => {
-        // [New Requirement] Exclude Tax and Support from Chart History (Actuals)
+        // Exclude Tax and Support from Chart History (Actuals)
         if (r.service.includes('Tax') || r.service.includes('Support')) return;
 
         if (r.service === 'Total' && historyRecords.some(hr => hr.service !== 'Total')) return;
@@ -282,12 +290,6 @@ export async function calculateDetailedForecast(
 
 
     // 7. Calculate Totals
-    // Let's re-calculate "Actuals in Target Period".
-    // For simplicity and backward compatibility with the 'Current Month' view:
-    // If Target Period starts in future, currentTotal (for that target) is 0.
-    // If Target Period includes today, we sum actuals.
-
-    // Let's fetch "Month to Date" actuals separate from chart history.
     const startOfMonth = new Date(currentYear, currentMonth, 1);
     const mtdClause: Prisma.CostRecordWhereInput = {
         date: { gte: startOfMonth, lt: todayStart }
@@ -325,10 +327,8 @@ export async function calculateDetailedForecast(
         history,
         forecast,
         currentTotal: displayCurrentTotal, // MTD or 0
-        totalPredicted, // Forecast Sum (Marked up) + MTD (if current) + Fixed Cost (Allocated) is handled inside forecast array?
-        // Wait, additionalFixedCost was added to daily forecast points in step 6.
-        // So forecastSum includes it.
-        // If current_month, we add MTD actuals.
-        budget: budgetRec?.amount || 0
+        totalPredicted,
+        budget: budgetRec?.amount || 0,
+        serviceBreakdown
     };
 }
