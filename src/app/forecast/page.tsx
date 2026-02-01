@@ -8,19 +8,23 @@ import {
     Table,
 } from 'lucide-react';
 import {
-    AreaChart,
-    Area,
+    ComposedChart,
+    Bar,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
+    Legend,
     ResponsiveContainer,
 } from 'recharts';
 import { Account } from '@/types';
 
 interface ForecastPoint {
     date: string;
-    amount: number;
+    dailyAvg: number;
+    monthlyTotal: number;
+    isForecast: boolean;
 }
 
 interface ServiceTrend {
@@ -45,7 +49,7 @@ export default function ForecastPage() {
     const [loading, setLoading] = useState(false);
     // Filters & Simulation Options
     const [selectedAccount, setSelectedAccount] = useState('all');
-    const [lookbackDays, setLookbackDays] = useState(30);
+
     const [adjustmentFactor, setAdjustmentFactor] = useState(1.0); // 1.0 = 100%
     const [additionalFixedCost, setAdditionalFixedCost] = useState(0);
     const [period, setPeriod] = useState<'current_month' | 'next_month' | 'next_quarter' | 'next_6_months' | 'next_12_months' | 'next_24_months'>('current_month');
@@ -58,7 +62,7 @@ export default function ForecastPage() {
 
     useEffect(() => {
         calculateForecast();
-    }, [selectedAccount, lookbackDays, adjustmentFactor, additionalFixedCost, period]);
+    }, [selectedAccount, adjustmentFactor, additionalFixedCost, period]);
 
     const loadAccounts = async () => {
         if (window.electron) {
@@ -71,7 +75,7 @@ export default function ForecastPage() {
         if (window.electron) {
             setLoading(true);
             try {
-                // @ts-ignore - types might not be fully synced in IDE, but runtime accepts string
+                // types might not be fully synced in IDE, but runtime accepts string
                 const result = await window.electron.calculateDetailedForecast({
                     accountId: selectedAccount,
                     options: {
@@ -92,11 +96,13 @@ export default function ForecastPage() {
 
     const handleCopy = () => {
         if (!data) return;
-        const header = ['Date', 'Type', 'Amount (USD)'].join('\t');
-        const rows = [
-            ...data.history.map((h) => [h.date, 'Actual', h.amount.toFixed(2)].join('\t')),
-            ...data.forecast.map((f) => [f.date, 'Forecast', f.amount.toFixed(2)].join('\t'))
-        ].join('\n');
+        const header = ['Date', 'Type', 'Daily Avg ($)', 'Monthly Total ($)'].join('\t');
+        const rows = chartData.map((d) => [
+            d.date,
+            d.isForecast ? 'Forecast' : 'Actual',
+            d.dailyAvg.toFixed(2),
+            d.monthlyTotal.toFixed(2)
+        ].join('\t')).join('\n');
 
         navigator.clipboard.writeText(`${header}\n${rows}`);
         alert('クリップボードにコピーしました (TSV)');
@@ -104,37 +110,43 @@ export default function ForecastPage() {
 
     interface ChartDataPoint {
         date: string;
-        actual: number | null;
-        forecast: number | null;
+        monthlyTotal: number;
+        dailyAvg: number;
+        isForecast: boolean;
     }
-    // Prepare chart data with proper connection
+
+    // Prepare chart data
     let chartData: ChartDataPoint[] = [];
+
     if (data) {
-        // 1. Add History (Actuals)
-        chartData = data.history.map((h) => ({
-            date: h.date,
-            actual: h.amount,
-            forecast: null
-        }));
+        // Merge History and Forecast
+        // Since API returns history and forecast as separate arrays of monthly points
+        // We can just concatenate them.
+        // HOWEVER, History and Forecast might overlap on current month?
+        // API ensures Forecast array starts from current month, History covers past 6 months.
+        // Let's rely on API sort order mostly.
 
-        // 2. Add Connection Point (Last Actual = First Forecast Start)
-        if (data.history.length > 0 && data.forecast.length > 0) {
-            const lastHistory = data.history[data.history.length - 1];
-            const lastPointIndex = chartData.length - 1;
-            chartData[lastPointIndex] = {
-                ...chartData[lastPointIndex],
-                forecast: lastHistory.amount
-            };
-        }
+        // Combine history + forecast
+        // Mark forecast points clearly
 
-        // 3. Add Forecast (Future)
-        data.forecast.forEach((f) => {
-            chartData.push({
-                date: f.date,
-                actual: null,
-                forecast: f.amount
+        // Actually, forecast-service returns history for past months, forecast for future (including current).
+        // Let's just concat.
+
+        const allPoints = [...data.history, ...data.forecast];
+
+        // Deduplicate by date just in case (e.g. current month overlap)
+        const map = new Map<string, ChartDataPoint>();
+
+        allPoints.forEach(p => {
+            map.set(p.date, {
+                date: p.date,
+                monthlyTotal: p.monthlyTotal,
+                dailyAvg: p.dailyAvg,
+                isForecast: p.isForecast
             });
         });
+
+        chartData = Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
     }
 
     const formatCurrency = (val: number) => `$${val.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -215,6 +227,7 @@ export default function ForecastPage() {
                                         <label className="block text-xs font-medium text-slate-500 uppercase mb-1.5">予測対象期間</label>
                                         <select
                                             value={period}
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                             onChange={(e) => setPeriod(e.target.value as any)}
                                             className="w-full bg-slate-800 border border-slate-700 text-slate-200 text-sm rounded-lg p-2.5"
                                         >
@@ -267,69 +280,76 @@ export default function ForecastPage() {
 
                             <div className="flex-1 w-full min-h-0">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                                        <defs>
-                                            <linearGradient id="colorHistory" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                                            </linearGradient>
-                                            <linearGradient id="colorForecast" x1="0" y1="0" x2="0" y2="1">
-                                                <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3} />
-                                                <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
-                                            </linearGradient>
-                                        </defs>
-                                        <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                                        <XAxis
-                                            dataKey="date"
-                                            stroke="#475569"
-                                            fontSize={12}
-                                            tickFormatter={(val) => {
-                                                const d = new Date(val);
-                                                // If period spans over 6 months, show year/month
-                                                if (period === 'next_12_months' || period === 'next_24_months') {
-                                                    return `${d.getFullYear()}/${d.getMonth() + 1}`;
-                                                }
-                                                return `${d.getMonth() + 1}/${d.getDate()}`;
-                                            }}
-                                        />
-                                        <YAxis
-                                            stroke="#475569"
-                                            fontSize={12}
-                                            tickFormatter={(val) => `$${val}`}
-                                        />
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: '#0f172a',
-                                                border: '1px solid #1e293b',
-                                                borderRadius: '12px',
-                                            }}
-                                            itemStyle={{ color: '#f8fafc' }}
-                                            labelFormatter={(label) => new Date(label as string).toLocaleDateString()}
-                                            formatter={(value: number | undefined, name?: string) => {
-                                                const label = name === 'actual' ? '実績' : '予測';
-                                                return value != null ? [`$${Number(value).toFixed(2)}`, label] : ['', label];
-                                            }}
-                                        />
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+                                            <XAxis
+                                                dataKey="date"
+                                                stroke="#475569"
+                                                fontSize={12}
+                                                tickFormatter={(val) => {
+                                                    const [y, m] = val.split('-');
+                                                    return `${y}/${Number(m)}`; // YYYY/M
+                                                }}
+                                            />
+                                            {/* Left Axis: Monthly Total */}
+                                            <YAxis
+                                                yAxisId="left"
+                                                stroke="#3b82f6"
+                                                fontSize={12}
+                                                tickFormatter={(val) => `$${val}`}
+                                                orientation="left"
+                                            />
+                                            {/* Right Axis: Daily Avg */}
+                                            <YAxis
+                                                yAxisId="right"
+                                                stroke="#10b981"
+                                                fontSize={12}
+                                                tickFormatter={(val) => `$${val}`}
+                                                orientation="right"
+                                            />
+                                            <Tooltip
+                                                contentStyle={{
+                                                    backgroundColor: '#0f172a',
+                                                    border: '1px solid #1e293b',
+                                                    borderRadius: '12px',
+                                                }}
+                                                itemStyle={{ color: '#f8fafc' }}
+                                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                formatter={(value: number | undefined, name: any, props: any) => {
+                                                    if (value == null) return ['', name];
+                                                    if (name === 'dailyAvg') return [`$${value.toFixed(2)}`, 'Daily Avg'];
+                                                    if (name === 'monthlyTotal') {
+                                                        const isForecast = props.payload.isForecast;
+                                                        return [`$${value.toFixed(2)}`, isForecast ? 'Monthly Forecast' : 'Monthly Actual'];
+                                                    }
+                                                    return [value, name];
+                                                }}
+                                                labelFormatter={(label) => label}
+                                            />
+                                            <Legend />
 
-                                        {/* Actuals Line */}
-                                        <Area
-                                            type="monotone"
-                                            dataKey="actual"
-                                            stroke="#3b82f6"
-                                            strokeWidth={3}
-                                            fill="url(#colorHistory)"
-                                        />
+                                            {/* Bar: Monthly Total (Blue for actual, Purple for forecast) */}
+                                            <Bar
+                                                yAxisId="left"
+                                                dataKey="monthlyTotal"
+                                                barSize={40}
+                                                fill="#3b82f6"
+                                                radius={[4, 4, 0, 0]}
+                                            />
 
-                                        {/* Forecast Line */}
-                                        <Area
-                                            type="monotone"
-                                            dataKey="forecast"
-                                            stroke="#8b5cf6"
-                                            strokeWidth={3}
-                                            strokeDasharray="5 5"
-                                            fill="url(#colorForecast)"
-                                        />
-                                    </AreaChart>
+                                            {/* Line: Daily Avg (Green) */}
+                                            <Line
+                                                yAxisId="right"
+                                                type="monotone"
+                                                dataKey="dailyAvg"
+                                                stroke="#10b981"
+                                                strokeWidth={3}
+                                                dot={{ r: 4, fill: '#10b981' }}
+                                                activeDot={{ r: 6 }}
+                                            />
+                                        </ComposedChart>
+                                    </ResponsiveContainer>
                                 </ResponsiveContainer>
                             </div>
                         </div>
