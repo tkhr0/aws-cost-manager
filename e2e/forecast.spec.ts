@@ -2,7 +2,7 @@ import { test, expect, _electron as electron } from '@playwright/test';
 import path from 'path';
 import fs from 'fs';
 import { PrismaClient } from '@prisma/client';
-import { seed } from '../src/lib/test/seed-e2e';
+import { seed } from '../src/test/seed-e2e';
 
 test.describe('Forecast Page (Real Electron)', () => {
     test.setTimeout(60000); // Increase timeout
