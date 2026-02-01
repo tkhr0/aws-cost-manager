@@ -19,6 +19,7 @@
 
 # electron
 dist-electron/
+electron/dist/
 
 # production
 /build
@@ -27,11 +28,17 @@ dist-electron/
 .DS_Store
 *.pem
 
+# temporary
+/tmp
+
 # debug
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+
+# simulation logs
+simulation_log_*.txt
 
 # env files (can opt-in for committing if needed)
 .env*
