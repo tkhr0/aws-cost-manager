@@ -29,10 +29,10 @@ test.describe('Forecast Page (Real Electron)', () => {
     test('should calculate and display forecast based on real DB data', async () => {
         // 1. Setup Unique DB
         const uniqueId = Math.random().toString(36).substring(7);
-        dbPath = path.resolve(__dirname, `../ test - forecast - ${uniqueId}.db`);
-        const dbUrl = `file:${dbPath} `;
+        dbPath = path.resolve(__dirname, `../test-forecast-${uniqueId}.db`);
+        const dbUrl = `file:${dbPath}`;
 
-        console.log(`Using unique DB: ${dbPath} `);
+        console.log(`Using unique DB: ${dbPath}`);
 
         // 2. Seed Data using shared helper (sets up schema + basic data)
         await seed(dbUrl);
@@ -148,6 +148,6 @@ test.describe('Forecast Page (Real Electron)', () => {
         expect(text).not.toBe('$0.00');
 
         // Check chart exists
-        await expect(window.locator('.recharts-surface')).toBeVisible();
+        await expect(window.locator('.recharts-surface[role="application"]')).toBeVisible();
     });
 });
